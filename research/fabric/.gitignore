@@ -1,0 +1,11 @@
+**/node_modules/
+coverage/
+.pnpm-store/
+*.tsbuildinfo
+
+# These directories are installed-package fixtures, not generated dependencies.
+!packages/*/tests/fixtures/node_modules/
+!packages/*/tests/fixtures/node_modules/**
+
+# Build outputs; consumers build through the package `prepare` scripts on Git install.
+**/lib/

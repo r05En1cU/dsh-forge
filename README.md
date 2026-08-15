@@ -150,6 +150,10 @@ This layer holds process-level instrumentation power. Trust handlers are code, n
 
 `examples/universal-panel/` generalizes the bridge: declare a panel once, and every present surface gets it — surfaces are soft-detected (`ctx.get`, never hard `inject`), so the same plugin runs on web-only, tui-only, and headless hosts. The forge event stream is the single source of truth; each surface is a pure projection (sidebar badge/tab, TUI text lines). DSH has no official TUI registry today — the example carries a minimal `TuiRegistry` contract as the community convention an Ink-based implementation can fill in.
 
+## Example: plugin-demo (renamed from dsh-fabric-sidebar)
+
+`examples/plugin-demo/` is the cc-tui sidebar demo evolved into a pure forge-semantics better-sidebar: one plugin, webui (`ctx.betterSidebar` tab, no fabric injection) and tui (fabric-injected cc-tui sidebar, tier 3 — only TUI uses fabric). Both surfaces share the same forge events (`sidebar/files`, `sidebar/diff`, `sidebar/page`, `sidebar/visible`). On webui the plugin does NOT add a new demo tab: a small client relay pulls `/sidebar/dsh-plugin-demo/forge-snapshot` and re-emits the same forge events on the browser tree, and the vendored dsh-better-sidebar Explorer/Git panes subscribe to them (root listing from `sidebar/files`, changed files from `sidebar/diff`). On TUI the hotkeys are consumed through cc-tui's parsed Ink input context instead of competing with `process.stdin`, and the git-diff page renders green `+`/red `-` numstat rows from `sidebar/diff` payloads. See `examples/plugin-demo/README.md` for the local install/bootstrap steps.
+
 ## UI portability layer (`ctx.layers` / `ctx.states` / `ctx.components`)
 
 `tui` / `webui` / `gui` are implementations of three standard services (route A: explicit per-surface renderers, no least-common-denominator DSL):
