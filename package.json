@@ -1,0 +1,28 @@
+{
+  "name": "dsh-forge",
+  "version": "0.1.0",
+  "description": "Forge-style event facade over DSH/Cordis official plugin internals",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.ts examples/*/*.test.ts",
+    "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^26.2.0",
+    "@types/react": "^18.3.31",
+    "cordis-fabric": "file:research/fabric/packages/cordis-fabric",
+    "dsh-better-sidebar": "file:research/sidebar/node_modules/dsh-better-sidebar",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "dsh-forge-files",
+  "version": "0.1.0",
+  "description": "Workspace tree & file viewer slash commands for the TUI (forge demo)",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "license": "MIT"
+}
