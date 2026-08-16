@@ -1,7 +1,0 @@
-# dsh-plugin-demo bundle patch: the official one-command mount line is
-#   dsh plugin --profile <name> add dsh-plugin-demo
-# For local vendoring we copy the package into the profile and insert the
-# same row through the profile's cordis.patch.yml.
-- insert:
-    - id: plugin-demo
-      name: dsh-plugin-demo
