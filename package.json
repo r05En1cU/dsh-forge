@@ -1,0 +1,46 @@
+{
+  "name": "dsh-forge",
+  "version": "0.2.0",
+  "description": "NeoForge-style standard API layer for DeepSeek Harness plugins: first-class fabric mixins + a Cordis-native event bus",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepare": "pnpm run build"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1-0",
+    "cordis-fabric": ">=0.0.1-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "cordis-fabric": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^26.2.0",
+    "cordis-fabric": "file:research/fabric/packages/cordis-fabric",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT",
+  "packageManager": "pnpm@11.20.0",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js"
+}

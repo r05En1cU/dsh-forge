@@ -1,0 +1,32 @@
+export {
+  createForge,
+  getForge,
+  getForgeStatus,
+  defineCatalog,
+  defineInjectionPoint,
+  defineEventPoint,
+} from './forge.ts'
+export { defineMixin, buildPatchStubs, MIXIN_ID_RE } from './mixin.ts'
+export type { FabricPatchStubLike } from './mixin.ts'
+export { ForgeService } from './service.ts'
+export type { ForgePolicy, PointRecord, RegisterOptions } from './service.ts'
+export { contractSuite } from './testkit.ts'
+export type { ContractHarness } from './testkit.ts'
+export { satisfies } from './backends/fabric.ts'
+export type { FabricBackendOptions } from './backends/fabric.ts'
+export { kOptOut } from './types.ts'
+export type {
+  Backend,
+  BindOptions,
+  BindResult,
+  BindStatus,
+  Catalog,
+  FabricOperation,
+  FabricTargetRef,
+  ForgeEvent,
+  Hooks,
+  InjectionPoint,
+  Mixin,
+  MixinRef,
+  RuntimeTarget,
+} from './types.ts'

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# test fixtures are checked-in fake packages, not generated dependencies
+!test/fixtures/node_modules/
+!test/fixtures/node_modules/**
