@@ -7,7 +7,7 @@ import type {
   MixinOperation,
   PointSource,
 } from './types.ts'
-import { MIXIN_ID_RE, normalizeMixin } from './mixin.ts'
+import { MIXIN_ID_RE, normalizeMixin } from './mixin-define.ts'
 
 const CAPABILITY: Record<MixinOperation, ReadonlySet<NonNullable<InjectionPoint['requires']>>> = {
   before: new Set(['observe', 'mutate']),

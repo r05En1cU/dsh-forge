@@ -1,11 +1,9 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Backend, BindResult, Catalog, CatalogInput, NeoForgeEvent, Hooks, InjectionPoint, InjectionPointInput, Mixin, PointSource } from './types.ts'
 import { defineCatalog, defineInjectionPoint } from './registry.ts'
-import { defineMixin } from './mixin.ts'
+import { defineMixin } from './mixin-define.ts'
 import { createGetViewBackend } from './backends/getview.ts'
 import { createPrototypeBackend } from './backends/prototype.ts'
-import { createRuntimeMixinBackend, installRuntimeMixin, type RuntimeMixinOptions } from './backends/runtime-mixin.ts'
-import { createModuleMixinBackend } from './backends/module-mixin.ts'
 import { createEventAliasBackend } from './backends/event-alias.ts'
 
 /** Host policy, settable per subtree via `ctx.intercept('neoforge', …)`. */
@@ -16,10 +14,7 @@ export interface NeoForgePolicy {
   deny?: string[]
 }
 
-export interface RegisterOptions {
-  /** Options for the runtime mixin backend. */
-  mixin?: RuntimeMixinOptions
-}
+export interface RegisterOptions {}
 
 export interface PointRecord extends BindResult {
   catalog: string
@@ -52,11 +47,7 @@ function pointFromMixin(input: Mixin): Readonly<InjectionPoint> {
   const requires = mixin.operation === 'replace' ? 'replace' : 'mutate'
   return defineInjectionPoint({
     id: mixin.id,
-    source: {
-      kind: 'mixin',
-      target: mixin.target,
-      operation: mixin.operation,
-    },
+    source: { kind: 'mixin', target: mixin.target, operation: mixin.operation },
     requires,
   })
 }
@@ -71,52 +62,64 @@ function normalizeInput(input: CatalogInput | InjectionPointInput[] | Mixin[]): 
   return defineCatalog(input)
 }
 
-function backendForSource(source: PointSource, options: RegisterOptions): Backend {
-  switch (source.kind) {
-    case 'event': return createEventAliasBackend()
-    case 'view': return createGetViewBackend()
-    case 'service': return createPrototypeBackend()
-    case 'mixin': {
-      const query = (source.target.functionQuery ?? {}) as { functionName?: unknown; expressionName?: unknown }
-      return query.functionName || query.expressionName
-        ? createModuleMixinBackend(options.mixin)
-        : createRuntimeMixinBackend(options.mixin)
-    }
+function unavailableBackend(name: string, reason: string): Backend {
+  return {
+    name,
+    available: () => false,
+    bind: () => ({ status: 'unavailable', reason }),
   }
 }
 
 /**
- * The neoforge standard API layer as a normal Cordis service.
- *
- * Two pillars, one registration path:
- *
- * 1. First-class mixins — `ctx.neoforge.registerMixin(mixin, handler)` patches the
- *    resolved runtime target in place: exact descriptor snapshot, wrapper
- *    execution, and snapshot restore on unload. No load-time hooks.
- * 2. Event bus — catalog points translate intercepted calls into ordinary
- *    Cordis events. Consumers write plain `ctx.on('vendor/action', …)` (or
- *    the `ctx.neoforge.on(...)` sugar below), so listener registration/recycling
- *    is the official Cordis event registration path and is HMR-safe by
- *    construction — no custom emitter, no global listener table.
- *
- * The service itself is mounted once at the root and governed per subtree
- * with `ctx.intercept('neoforge', policy)`.
+ * Core neoforge layer: catalog registration, official seams, event sugar,
+ * host policy. Runtime mixins are deliberately NOT imported here; mount
+ * `dsh-neoforge/mixin` and register its backend through `registerBackend()`.
  */
 export class NeoForgeService extends Service<NeoForgePolicy> {
   static provide = 'neoforge'
 
   private readonly records = new Map<string, PointRecord>()
+  private readonly backends = new Map<string, Backend>()
+  private readonly backendBindings = new Map<string, Set<string>>()
 
   constructor(ctx: Context) {
     super(ctx, 'neoforge')
   }
 
+  /** Register an external backend (e.g. the mixin layer). Fiber-scoped. */
+  registerBackend(name: string, backend: Backend): void {
+    if (!name || !backend || typeof backend.bind !== 'function') {
+      throw new Error('neoforge: registerBackend requires a name and a backend')
+    }
+    if (this.backends.has(name)) {
+      throw new Error(`neoforge: backend "${name}" is already registered`)
+    }
+    this.backends.set(name, backend)
+    const keys = this.backendBindings.get(name) ?? new Set<string>()
+    this.backendBindings.set(name, keys)
+    this.ctx.effect(() => {
+      return () => {
+        for (const key of [...keys]) {
+          const record = this.records.get(key)
+          if (record) {
+            record.dispose?.()
+            record.status = 'unavailable'
+            record.reason = `backend "${name}" was unloaded`
+          }
+        }
+        keys.clear()
+        this.backends.delete(name)
+      }
+    }, `neoforge:backend(${name})`)
+  }
+
+  hasBackend(name: string): boolean {
+    return this.backends.has(name)
+  }
+
   /**
    * Official event registration sugar. These methods delegate 1:1 to
-   * `ctx.on` / `ctx.once` / `ctx.emit` / `ctx.bail` on the calling context;
-   * the returned disposer belongs to the calling fiber, exactly as if the
-   * developer had written `ctx.on(...)` themselves. This is what makes the
-   * event bus reuse DSH's official HMR event lifecycle.
+   * `ctx.on` / `ctx.once` / `ctx.emit` / `ctx.bail` on the calling context.
    */
   on(name: string, listener: (event: any) => any, options?: { prepend?: boolean; global?: boolean } | boolean): () => boolean {
     return this.ctx.on(name as any, listener as any, options as any)
@@ -134,35 +137,9 @@ export class NeoForgeService extends Service<NeoForgePolicy> {
     return this.ctx.bail(name as any, event)
   }
 
-  /**
-   * Register a first-class mixin directly — no event projection, full
-   * snapshot/restore runtime semantics. The patch is owned by the calling
-   * fiber: unload restores the exact original descriptor.
-   */
-  registerMixin(input: Mixin, handler: (call: any, invoke?: () => unknown) => unknown, options?: RuntimeMixinOptions): string {
-    const mixin = defineMixin(input)
-    if (typeof handler !== 'function') {
-      throw new Error(`neoforge: mixin "${mixin.id}" requires a trusted handler function`)
-    }
-    const result = installRuntimeMixin(this.ctx, mixin, handler, options)
-    if (result.status === 'unavailable') {
-      throw new Error(`neoforge: cannot register mixin "${mixin.id}" — ${result.reason}`)
-    }
-    if (result.status === 'missing') {
-      throw new Error(`neoforge: cannot register mixin "${mixin.id}" — ${result.reason}`)
-    }
-    this.ctx.effect(() => result.dispose ?? (() => {}), `neoforge:mixin(${mixin.id})`)
-    if (result.status === 'pending') {
-      this.ctx.logger('neoforge').warn(`mixin "${mixin.id}" is pending: ${result.reason}`)
-    }
-    return mixin.id
-  }
-
   /** Register a catalog (or bare point/mixin list); unloaded with the calling fiber. */
-  register(input: CatalogInput | InjectionPointInput[] | Mixin[], options: RegisterOptions = {}) {
+  register(input: CatalogInput | InjectionPointInput[] | Mixin[], _options: RegisterOptions = {}) {
     const catalog = normalizeInput(input)
-    // Resolved against the CALLER's context (traceable shadow), so host policy
-    // set via ctx.intercept('neoforge', …) on any ancestor applies per-subtree.
     const policy = this[Service.resolveConfig]() as NeoForgePolicy
     const ctx = this.ctx
 
@@ -185,10 +162,10 @@ export class NeoForgeService extends Service<NeoForgePolicy> {
       } else {
         const declared = point.requires ?? 'observe'
         const mutate = declared !== 'observe' && policy.allowMutate !== false
-        const backend = backendForSource(point.source, options)
+        const backend = this.resolveBackend(point.source)
         const result = backend.available(ctx)
           ? backend.bind(ctx, point, hooks, { mutate })
-          : { status: 'unavailable' as const, reason: `${backend.name} backend not available` }
+          : { status: 'unavailable' as const, reason: `${backend.name} backend not available: ${backend.name === 'mixin' ? 'mount dsh-neoforge/mixin first' : 'backend unavailable'}` }
         record = {
           catalog: catalog.plugin, point: point.id, tier: point.tier, source: point.source,
           kind: point.source.kind,
@@ -201,17 +178,26 @@ export class NeoForgeService extends Service<NeoForgePolicy> {
             `injection point "${point.id}" ${record.status}${record.reason ? `: ${record.reason}` : ''}`,
           )
         }
-        if (result.dispose) disposers.push(result.dispose)
+        if (result.dispose) {
+          disposers.push(result.dispose)
+          let bound = this.backendBindings.get(backend.name)
+          if (!bound) this.backendBindings.set(backend.name, (bound = new Set()))
+          bound.add(key)
+        }
       }
       this.records.set(key, record)
       keys.push(key)
     }
 
-    // fiber-scoped cleanup on the registering plugin's fiber
     ctx.effect(() => {
       return () => {
         for (const dispose of disposers.reverse()) dispose()
-        for (const key of keys) this.records.delete(key)
+        for (const key of keys) {
+          const record = this.records.get(key)
+          const bound = record ? this.backendBindings.get(record.backend) : undefined
+          bound?.delete(key)
+          this.records.delete(key)
+        }
       }
     }, `neoforge:register(${catalog.plugin})`)
 
@@ -224,5 +210,17 @@ export class NeoForgeService extends Service<NeoForgePolicy> {
       ...record,
       status: verify?.() ?? record.status,
     }))
+  }
+
+  private resolveBackend(source: PointSource): Backend {
+    switch (source.kind) {
+      case 'event': return createEventAliasBackend()
+      case 'view': return createGetViewBackend()
+      case 'service': return createPrototypeBackend()
+      case 'mixin': {
+        return this.backends.get('mixin')
+          ?? unavailableBackend('mixin', 'mixin layer not installed; mount createMixinLayer() before catalogs')
+      }
+    }
   }
 }

@@ -3,7 +3,7 @@
 面向 DeepSeek Harness（DSH）插件开发的**类 NeoForge 标准 API 层**：
 
 - **语义化 source，先 seam 后 mixin**：catalog 作者声明 `event / service / view / mixin`，后端自动选择；官方已有事件或服务方法时零补丁。
-- **Mixin 是一等公民**：`defineMixin()` 是显式、可版本治理的织入声明；默认在**运行期**解析目标、保留旧快照、执行修改后的包装，卸载时恢复旧快照——不需要宿主安装任何加载期 hooks。
+- **Mixin 是可选子层**：`dsh-neoforge/mixin` 通过 `createMixinLayer()` 挂载；运行期解析目标、保留旧快照、执行修改后的包装，卸载时恢复旧快照。
 - **运行期目标全局独占**：同一目标被多个第三方包 patch 时直接 loud error，不做隐式链式叠加。
 - **事件总线复用官方 HMR**：`ctx.on('vendor/action', handler)` / `ctx.neoforge.on(...)` 就是官方 Cordis 事件注册，fiber 卸载自动回收 listener。
 
@@ -87,8 +87,11 @@ export default defineCatalog({
 
 ```ts
 import { createNeoForge } from 'dsh-neoforge'
+import { createMixinLayer } from 'dsh-neoforge/mixin'
 import agentCatalog from './catalogs/agent.ts'
 
+// catalog 含 source.kind === 'mixin' 时，必须先挂可选 mixin 层
+ctx.plugin(createMixinLayer())
 ctx.plugin(createNeoForge(agentCatalog))
 ```
 
@@ -150,7 +153,7 @@ type OperationPhases = {
 }
 ```
 
-事件后端和裸 `registerMixin` 后端共享这一个操作分发器，因此 async settle、host policy、payload 映射只实现一次。
+事件后端和裸 `ctx.mixinLayer.register` 后端共享这一个操作分发器，因此 async settle、host policy、payload 映射只实现一次。
 
 ## 事件语义
 
@@ -219,7 +222,7 @@ ctx.intercept('neoforge', { deny: ['vendor/unsafe-point'] })
 ctx.intercept('neoforge', { allowMutate: false })
 
 ctx.neoforge.register(catalog)         // fiber-scoped 注册
-ctx.neoforge.registerMixin(mixin, h)   // 裸 mixin 运行期注册
+ctx.mixinLayer.register(mixin, h)      // 裸 mixin 运行期注册
 ctx.neoforge.status()                  // 每个注入点的 source/后端/绑定/漂移诊断
 ctx.neoforge.on(name, listener)        // = ctx.on，官方 HMR 事件路径
 ```
@@ -263,14 +266,56 @@ ctx.ui.component({
 内置 adapter：
 
 ```ts
-import { createUiKit, webuiSlotsAdapter, tuiPanelAdapter } from 'dsh-neoforge/ui'
+import { createUiKit, webuiSlotsAdapter, tuiAdapter } from 'dsh-neoforge/ui'
 
 ctx.plugin(createUiKit({
   adapters: [
     webuiSlotsAdapter({ createElement: React.createElement }),
-    tuiPanelAdapter(),
+    tuiAdapter(),
   ],
 }))
+```
+
+- `tuiPanelAdapter()`：注册到 CodeWhale 风格的 `registerPanel` surface；
+- `tuiOverlayAdapter()`：注册到官方 dsh/cc-tui 的 `openOverlay` surface；
+- `tuiAdapter()` / `codewhaleTuiAdapter`：自动选择上述两种 TUI surface。
+
+`dsh-neoforge/ui` 同时内置了迁移自 CodeWhale 的 TUI 表面：
+
+```ts
+import { createTui } from 'dsh-neoforge/ui'
+
+ctx.plugin(createTui({ placement: 'top', panel: 'tasks' }))
+
+ctx.tui.registerPanel({
+  id: 'neoforge.status',
+  title: 'neoforge',
+  lines: () => ctx.neoforge.status().map((row) => `${row.id}: ${row.mounted.join(',')}`),
+})
+
+ctx.tui.setWorkSurface({
+  panel: 'tasks',
+  placement: 'top',
+  rows: [
+    { id: 'patch', label: 'runtime mixin', status: 'done', tone: 'success' },
+    { id: 'tui', label: 'migrate CodeWhale TUI', status: 'running', tone: 'live' },
+  ],
+})
+
+ctx.tui.render({ width: 80, height: 24 }) // 确定性文本快照
+```
+
+`createTui` 是幂等插件；`ctx.tui` 支持 `registerPanel` / `openOverlay` / `setChrome` / `render`，panel/overlay 都随调用 fiber 自动回收。`createCodewhaleTui` 是迁移别名。
+
+Node 侧零依赖 ANSI host：
+
+```ts
+import { createTuiHost } from 'dsh-neoforge/tui-host'
+
+ctx.plugin(createUiKit({ adapters: [tuiAdapter()] }))
+ctx.plugin(createTui())
+ctx.plugin(createTuiHost())
+// q / ctrl+c 发出 'tui/host/exit-requested'，launcher 负责 shutdown
 ```
 
 GUI/React Native 可以用同一套 `SurfaceAdapter` 约定接自己的 service。
@@ -309,7 +354,7 @@ ctx.plugin(createNeoForgeClient({
 ```sh
 pnpm install         # 同时执行 prepare 构建 dist/
 pnpm run typecheck   # tsc strict
-pnpm test            # 55 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
+pnpm test            # 64 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + CodeWhale TUI + HMR + policy
 pnpm run build       # dist/ ESM + d.ts
 ```
 

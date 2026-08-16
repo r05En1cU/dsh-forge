@@ -3,15 +3,35 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
-  createNeoForge,
+  createNeoForge as coreCreateNeoForge,
   defineInjectionPoint,
-  defineMixin,
   getNeoForgeStatus,
+  type NeoForgeEvent,
+} from '../src/index.ts'
+import {
+  createMixinLayer,
+  defineMixin,
   reloadModule,
   trackModule,
   untrackModule,
-  type NeoForgeEvent,
-} from '../src/index.ts'
+  type RuntimeMixinOptions,
+} from '../src/mixin.ts'
+
+// Test wrapper: mount the optional mixin layer before the core catalog, just
+// like the documented `createMixinLayer()` flow.
+function createNeoForge(input: any, options: { mixin?: RuntimeMixinOptions } = {}) {
+  return {
+    name: 'test-neoforge-with-mixin',
+    async apply(ctx: any) {
+      const fibers: any[] = []
+      fibers.push(await ctx.plugin(createMixinLayer(options.mixin)))
+      fibers.push(await ctx.plugin(coreCreateNeoForge(input)))
+      return async () => {
+        for (const fiber of fibers) await fiber.dispose()
+      }
+    },
+  }
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -60,7 +80,7 @@ test('runtime mixin: exact descriptor snapshot → wrapper → restore on unload
   assert.notEqual(runtime.helper, original)
   assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   // functionName mixins are routed through the dedicated module event layer
-  assert.equal(getNeoForgeStatus(ctx)[0].backend, 'module-mixin')
+  assert.equal(getNeoForgeStatus(ctx)[0].backend, 'mixin')
 
   const seen: unknown[] = []
   ctx.on('runtime/helper/before', (e) => {
@@ -311,16 +331,16 @@ test('runtime mixin: class targets resolve through internal/service when the mod
   assert.equal(ctx.get('chat-runtime').send('hi'), '[late] HI')
 })
 
-test('ctx.neoforge.registerMixin: raw handler runs against the snapshot and restores on fiber unload', async (t) => {
+test('ctx.mixinLayer.register: raw handler runs against the snapshot and restores on fiber unload', async (t) => {
   const original = runtime.helper
   const originalDesc = Object.getOwnPropertyDescriptor(runtime, 'helper')!
   const ctx = new Context()
   await ctx.plugin(createNeoForge([]))
   const fiber = await ctx.plugin({
     name: 'raw-mixin-user',
-    inject: ['neoforge'],
+    inject: ['mixinLayer'],
     apply(c: any) {
-      c.neoforge.registerMixin(helperMixin(), (call: any) => {
+      c.mixinLayer.register(helperMixin(), (call: any) => {
         call.arguments[0] = String(call.arguments[0]).toUpperCase()
       })
     },

@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { defineMixin } from '../src/mixin.ts'
 import {
   contractSuite,
   createNeoForge,
   defineCatalog,
   defineEventPoint,
   defineInjectionPoint,
-  defineMixin,
   getNeoForgeStatus,
   kOptOut,
   type NeoForgeEvent,
@@ -490,7 +490,7 @@ test('defineEventPoint is the explicit event-bus alias', () => {
 // ---------- conservative version-range diagnostics ----------
 
 test('satisfies supports the ranges real DSH catalogs use', async () => {
-  const { satisfies } = await import('../src/index.ts')
+  const { satisfies } = await import('../src/mixin.ts')
   assert.equal(satisfies('0.1.0-rc.0', '>=0.0.0-0'), true)
   assert.equal(satisfies('1.2.0', '^1.0.0'), true)
   assert.equal(satisfies('2.0.0', '^1.0.0'), false)

@@ -12,7 +12,7 @@
 │   ctx.neoforge.on(...) 语法糖（1:1 委托 ctx.on）              │
 ├──────────────────────────────────────────────────────────┤
 │ 标准 API 层（dsh-neoforge，本仓库）                           │
-│   defineMixin       —— 一等 Mixin 声明                     │
+│   defineMixin       —— 可选 mixin 子层声明                 │
 │   defineEventPoint  —— 语义 source → 稳定事件契约          │
 │   defineCatalog     —— 每个官方包一份版本化 catalog         │
 │   NeoForgeService      —— 注册、诊断、host policy             │
@@ -39,7 +39,7 @@ type OperationPhases = {
 }
 ```
 
-`dispatchOperation()` 是唯一 operation switch，事件路径和裸 `registerMixin` 路径都编译为 phases：
+`dispatchOperation()` 是唯一 operation switch，事件路径和裸 `ctx.mixinLayer.register` 路径都编译为 phases：
 
 - `before` → `phases.before` → `proceed`
 - `after` → `proceed` → settle → `phases.after`
@@ -116,9 +116,9 @@ HMR 分级：
 src/
   advice.ts          OperationPhases + dispatchOperation（唯一操作原语）
   version.ts         satisfies：保守 semver 漂移诊断
-  mixin.ts           defineMixin / 目标校验
+  mixin.ts           dsh-neoforge/mixin 子层入口 / createMixinLayer
   registry.ts        defineEventPoint / defineCatalog / source normalize
-  service.ts         NeoForgeService：source → backend、诊断、registerMixin
+  service.ts         NeoForgeService：source → backend registry、诊断
   dispatch.ts        事件构造 + tier 1/2 的 dispatchCall
   backends/
     event-alias.ts   event source

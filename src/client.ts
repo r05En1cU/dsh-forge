@@ -65,7 +65,6 @@ export function createNeoForgeClient(options: NeoForgeClientOptions) {
 
 // Pure declaration helpers are browser-safe, so catalogs can share them.
 export { defineCatalog, defineEventPoint, defineInjectionPoint } from './registry.ts'
-export { defineMixin } from './mixin.ts'
 export type {
   Catalog,
   CatalogInput,

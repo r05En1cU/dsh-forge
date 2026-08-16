@@ -20,7 +20,19 @@
       "types": "./dist/ui/index.d.ts",
       "default": "./dist/ui/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tui": {
+      "types": "./dist/ui/tui.d.ts",
+      "default": "./dist/ui/tui.js"
+    },
+    "./tui-host": {
+      "types": "./dist/tui-host.d.ts",
+      "default": "./dist/tui-host.js"
+    },
+    "./mixin": {
+      "types": "./dist/mixin.d.ts",
+      "default": "./dist/mixin.js"
+    }
   },
   "files": [
     "dist",

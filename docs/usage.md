@@ -8,10 +8,13 @@
 
 | 入口 | 平台 | 内容 |
 |---|---|---|
-| `dsh-neoforge` | Node host / TUI | 全部核心 API |
+| `dsh-neoforge` | Node host / TUI | 核心 API |
+| `dsh-neoforge/mixin` | Node host / TUI | 可选 mixin 层 |
 | `dsh-neoforge/client` | Browser / WebUI | 浏览器安全 client 入口 |
 | `dsh-neoforge/relay` | Node host | host→browser 快照路由 |
 | `dsh-neoforge/ui` | 纯 Cordis，Node/Browser 均可 | 统一 UI 服务 |
+| `dsh-neoforge/tui` | 纯 Cordis，Node/Browser 均可 | `ctx.tui` surface + CodeWhale 词汇 |
+| `dsh-neoforge/tui-host` | Node host | 零依赖 ANSI panel host |
 
 ```sh
 pnpm add dsh-neoforge @deepseek-ai/cordis
@@ -57,7 +60,7 @@ catalog  ──定义──> injection points（source）
 ## 2. 一等 Mixin：`defineMixin`
 
 ```ts
-import { defineMixin } from 'dsh-neoforge'
+import { defineMixin } from 'dsh-neoforge/mixin'
 
 export const recomposeMixin = defineMixin({
   id: 'agent/presets/recompose',        // 全局唯一 patch id
@@ -201,8 +204,11 @@ export default defineCatalog({
 
 ```ts
 import { createNeoForge } from 'dsh-neoforge'
+import { createMixinLayer } from 'dsh-neoforge/mixin'
 import agentCatalog from './catalogs/agent.ts'
 
+// catalog 含 mixin source 时先挂载 mixin 层
+await ctx.plugin(createMixinLayer())
 await ctx.plugin(createNeoForge(agentCatalog))
 ```
 
@@ -290,7 +296,7 @@ operation → 阶段映射：
 ```ts
 const neo = getNeoForge(ctx)
 neo.register(catalog, options)
-neo.registerMixin(mixin, handler, options)
+ctx.mixinLayer.register(mixin, handler, options)
 neo.status()
 neo.on(...) / once(...) / emit(...) / bail(...)
 ```
@@ -298,7 +304,7 @@ neo.on(...) / once(...) / emit(...) / bail(...)
 ### 6.1 裸 Mixin 注册
 
 ```ts
-ctx.neoforge.registerMixin(mixin, (call, invoke) => {
+ctx.mixinLayer.register(mixin, (call, invoke) => {
   // call: { arguments, self, result? }
   call.arguments[0] = String(call.arguments[0]).toUpperCase()
 })
@@ -488,12 +494,12 @@ ctx.ui.component({
 ### 9.4 Adapters
 
 ```ts
-import { createUiKit, webuiSlotsAdapter, tuiPanelAdapter } from 'dsh-neoforge/ui'
+import { createUiKit, webuiSlotsAdapter, tuiAdapter } from 'dsh-neoforge/ui'
 
 ctx.plugin(createUiKit({
   adapters: [
     webuiSlotsAdapter({ createElement: React.createElement }),
-    tuiPanelAdapter(),
+    tuiAdapter(),
   ],
 }))
 ```
@@ -507,6 +513,55 @@ ctx.plugin(createUiKit({
 
 - `service` 默认 `'tui'`；
 - 把 vnode 投影为 `string[]`，注册 `registerPanel({ id, title, lines })`。
+
+`tuiOverlayAdapter`：
+
+- 面向官方 dsh/cc-tui 的 `ctx.tui.openOverlay`；
+- 把 vnode 变成 `{ render(width), invalidate() }` 组件，组件卸载时关闭 overlay session。
+
+`tuiAdapter` / `codewhaleTuiAdapter`：
+
+- 优先 `registerPanel`，缺失时回退 `openOverlay`。
+
+### 9.5 内置 CodeWhale TUI surface
+
+```ts
+import { createTui, h } from 'dsh-neoforge/ui'
+
+ctx.plugin(createTui({ width: 100, height: 30, panel: 'tasks', placement: 'top' }))
+
+ctx.tui.registerPanel({
+  id: 'feed',
+  title: 'Feed',
+  lines: () => store.getSnapshot().items.map((item) => `- ${item}`),
+})
+
+ctx.tui.setWorkRows([
+  { id: '1', label: 'resolve runtime target', status: 'done', tone: 'success' },
+  { id: '2', label: 'project panel', status: 'running', tone: 'live' },
+])
+
+ctx.tui.setChrome({
+  header: [h('text', { value: 'dsh-neoforge TUI' })],
+  composer: h('composer', { prompt: '>', value: 'next' }),
+  footer: ['ctrl+c exits'],
+})
+
+const lines = ctx.tui.render() // 文本快照，适合测试/日志/无头终端
+```
+
+`TuiService` 的 `registerPanel` 和 `openOverlay` 都是 fiber effect：调用插件卸载时自动移除。`createCodewhaleTui` / `createCodeWhaleTui` 是迁移别名。
+
+Node TUI 宿主：
+
+```ts
+import { createTuiHost } from 'dsh-neoforge/tui-host'
+
+ctx.plugin(createUiKit({ adapters: [tuiAdapter()] }))
+ctx.plugin(createTui())
+ctx.plugin(createTuiHost())
+// q / ctrl+c 发出 'tui/host/exit-requested'，退出由 launcher 处理
+```
 
 自定义 surface：
 
