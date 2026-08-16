@@ -611,6 +611,16 @@ contractSuite(chatCatalog, {
 
 ## 14. 从 dsh-forge 迁移
 
+可自动迁移：
+
+```sh
+pnpm run migrate:neoforge
+# 或先 dry-run：
+node scripts/migrate-dsh-neoforge.mjs --dry-run
+```
+
+AI agent 可调用 `skills/dsh-neoforge-migrate/SKILL.md` 完成带校验的迁移。
+
 | 旧 | 新 |
 |---|---|
 | package `dsh-forge` | package `dsh-neoforge` |

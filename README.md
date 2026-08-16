@@ -307,4 +307,4 @@ pnpm test            # 56 项：Advice + source + runtime/module mixin + WebUI r
 pnpm run build       # dist/ ESM + d.ts
 ```
 
-要求 Node ≥ 22.19；ESM class 运行期补丁依赖当前 Node 的同步 `require(esm)`（Node 24 默认启用）。架构决策见 [`docs/architecture.md`](docs/architecture.md)，完整调用文档见 [`docs/usage.md`](docs/usage.md)，vendored 上游参考 [`research/fabric`](research/fabric)。
+要求 Node ≥ 22.19；ESM class 运行期补丁依赖当前 Node 的同步 `require(esm)`（Node 24 默认启用）。架构决策见 [`docs/architecture.md`](docs/architecture.md)，完整调用文档见 [`docs/usage.md`](docs/usage.md)，迁移技能见 [`skills/dsh-neoforge-migrate/SKILL.md`](skills/dsh-neoforge-migrate/SKILL.md)，vendored 上游参考 [`research/fabric`](research/fabric)。

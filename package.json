@@ -31,7 +31,9 @@
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "prepare": "pnpm run build"
+    "prepare": "pnpm run build",
+    "migrate:neoforge": "node scripts/migrate-dsh-neoforge.mjs --write",
+    "migrate:neoforge:check": "node scripts/migrate-dsh-neoforge.mjs --check"
   },
   "engines": {
     "node": ">=22.19.0"
