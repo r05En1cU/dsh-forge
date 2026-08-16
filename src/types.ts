@@ -4,6 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 export const kOptOut = Symbol.for('dsh-forge.optout')
 /** Cordis internal: unwrap traceable proxies to the raw service instance. */
 export const kOriginal = Symbol.for('cordis.original')
+/** Marks runtime-mixin wrappers; shared across package copies for chain diagnostics. */
+export const kPatched = Symbol.for('dsh-forge.patched')
 
 /** Fabric patch behavior kind, identical to cordis-fabric's FabricOperation. */
 export type FabricOperation = 'before' | 'after' | 'around' | 'replace'
@@ -90,8 +92,24 @@ export interface RuntimeTarget {
 }
 
 /**
- * One injection point: the event bus contract over a first-class mixin
- * (tier 3, fabric engine) or a runtime seam (tier 1/2, zero host wiring).
+ * Semantic target declaration. Catalog authors describe intent instead of a
+ * magic tier; `tier/runtime/mixin/fabric` legacy fields are normalized into
+ * this union by `defineInjectionPoint()`.
+ */
+export type PointSource =
+  /** Official event already exists: alias it, patch nothing. */
+  | { kind: 'event'; event: string }
+  /** Patch only the consumer-facing view (`internal/get`). */
+  | { kind: 'view'; service: string; method: string }
+  /** Patch a Cordis service prototype method (`internal/service`). */
+  | { kind: 'service'; service: string; method: string }
+  /** Runtime mixin: resolve + snapshot + wrap + restore. */
+  | { kind: 'mixin'; target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
+  /** Optional load-time fabric bridge for runtime-unreachable targets. */
+  | { kind: 'fabric'; target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
+
+/**
+ * One injection point: the event bus contract over a semantic `source`.
  *
  * Event name contract, identical for every backend:
  * - `{id}`        — observe event, dispatched after the call settles
@@ -109,11 +127,13 @@ export interface RuntimeTarget {
 export interface InjectionPoint {
   /** Event namespace and downstream entry, e.g. 'official-chat/message'. */
   id: string
-  /** 1 = consumer call view; 2 = service prototype method; 3 = fabric mixin. */
-  tier: 1 | 2 | 3
-  /** Required for tier 1/2. */
+  /** Canonical semantic source. */
+  source: PointSource
+  /** Derived legacy tier: 0=event, 1=view, 2=service, 3=mixin/fabric. */
+  tier: 0 | 1 | 2 | 3
+  /** Derived legacy runtime target for view/service sources. */
   runtime?: RuntimeTarget
-  /** Required for tier 3. The first-class mixin backing this event point. */
+  /** Derived first-class mixin for mixin/fabric sources. */
   mixin?: Mixin
   /**
    * @deprecated legacy nested form; `defineInjectionPoint()` normalizes it
@@ -132,20 +152,28 @@ export interface InjectionPoint {
     applyEvent?: (payload: Record<string, unknown>, args: unknown[]) => void
   }
   /**
-   * Tier-3 exemption marker: a fabric transform of a runtime-reachable service
-   * method forfeits runtime compatibility guarantees. Review-listed.
+   * Tier-3 exemption marker for the optional load-time bridge: transforming a
+   * runtime-reachable service method forfeits runtime compatibility
+   * guarantees. Review-listed.
    */
   engineExclusive?: boolean
   /** Official plugin version range this point was contract-tested against. */
   versionRange?: string
 }
 
-/**
- * Raw declaration shape accepted by `defineInjectionPoint()`: the mixin id may
- * be omitted and then inherits the point id.
- */
-export interface InjectionPointInput extends Omit<InjectionPoint, 'mixin'> {
+/** Raw declaration accepted by `defineInjectionPoint()`: semantic or legacy fields. */
+export interface InjectionPointInput {
+  id: string
+  source?: PointSource
+  tier?: 0 | 1 | 2 | 3
+  runtime?: RuntimeTarget
   mixin?: MixinRef
+  /** @deprecated legacy nested load-time form. */
+  fabric?: { target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
+  requires?: 'observe' | 'mutate' | 'replace'
+  map?: InjectionPoint['map']
+  engineExclusive?: boolean
+  versionRange?: string
 }
 
 /** Raw catalog declaration shape accepted by `defineCatalog()`. */

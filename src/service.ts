@@ -1,9 +1,12 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { Backend, BindResult, Catalog, CatalogInput, ForgeEvent, Hooks, InjectionPoint, InjectionPointInput, Mixin } from './types.ts'
+import type { Backend, BindResult, Catalog, CatalogInput, ForgeEvent, Hooks, InjectionPoint, InjectionPointInput, Mixin, PointSource } from './types.ts'
 import { defineCatalog, defineInjectionPoint } from './registry.ts'
 import { defineMixin } from './mixin.ts'
 import { createGetViewBackend } from './backends/getview.ts'
 import { createPrototypeBackend } from './backends/prototype.ts'
+import { createRuntimeMixinBackend, installRuntimeMixin, type RuntimeMixinOptions } from './backends/runtime-mixin.ts'
+import { createModuleMixinBackend } from './backends/module-mixin.ts'
+import { createEventAliasBackend } from './backends/event-alias.ts'
 import { createFabricBackend, type FabricBackendOptions } from './backends/fabric.ts'
 
 /** Host policy, settable per subtree via `ctx.intercept('forge', …)`. */
@@ -15,6 +18,9 @@ export interface ForgePolicy {
 }
 
 export interface RegisterOptions {
+  /** Options for the runtime mixin backend. */
+  mixin?: RuntimeMixinOptions
+  /** Options for the optional load-time fabric bridge. */
   fabric?: FabricBackendOptions
 }
 
@@ -22,7 +28,8 @@ export interface PointRecord extends BindResult {
   catalog: string
   point: string
   tier: number
-  kind: 'mixin' | 'runtime'
+  source: PointSource
+  kind: PointSource['kind']
   backend: string
   operation?: Mixin['operation']
   /** Host downgraded this mutating point to observe-only. */
@@ -32,10 +39,6 @@ export interface PointRecord extends BindResult {
 // Dynamic injection-point ids live outside Cordis's statically-known Events
 // keys; catalogs re-add them via `declare module` augmentation for consumers.
 type DynamicDispatch = (name: string, event: ForgeEvent) => void
-
-interface FabricServiceLike {
-  register(patch: unknown): unknown
-}
 
 function isMixin(value: unknown): value is Mixin {
   return !!value && typeof value === 'object'
@@ -50,7 +53,17 @@ function isMixinList(input: InjectionPointInput[] | Mixin[]): input is Mixin[] {
 function pointFromMixin(input: Mixin): Readonly<InjectionPoint> {
   const mixin = defineMixin(input)
   const requires = mixin.operation === 'replace' ? 'replace' : 'mutate'
-  return defineInjectionPoint({ id: mixin.id, tier: 3, mixin, requires })
+  return defineInjectionPoint({
+    id: mixin.id,
+    source: {
+      kind: 'mixin',
+      target: mixin.target,
+      operation: mixin.operation,
+      priority: mixin.priority,
+      required: mixin.required,
+    },
+    requires,
+  })
 }
 
 function normalizeInput(input: CatalogInput | InjectionPointInput[] | Mixin[]): Readonly<Catalog> {
@@ -63,14 +76,29 @@ function normalizeInput(input: CatalogInput | InjectionPointInput[] | Mixin[]): 
   return defineCatalog(input)
 }
 
+function backendForSource(source: PointSource, options: RegisterOptions): Backend {
+  switch (source.kind) {
+    case 'event': return createEventAliasBackend()
+    case 'view': return createGetViewBackend()
+    case 'service': return createPrototypeBackend()
+    case 'mixin': {
+      const query = (source.target.functionQuery ?? {}) as { functionName?: unknown; expressionName?: unknown }
+      return query.functionName || query.expressionName
+        ? createModuleMixinBackend(options.mixin)
+        : createRuntimeMixinBackend(options.mixin)
+    }
+    case 'fabric': return createFabricBackend(options.fabric)
+  }
+}
+
 /**
  * The forge standard API layer as a normal Cordis service.
  *
  * Two pillars, one registration path:
  *
- * 1. First-class mixins — `ctx.forge.registerMixin(mixin, handler)` forwards
- *    the declaration to `ctx.fabric`; fabric owns validation, priority
- *    composition, load-time bindings, and HMR ownership transfer.
+ * 1. First-class mixins — `ctx.forge.registerMixin(mixin, handler)` patches the
+ *    resolved runtime target in place: exact descriptor snapshot, wrapper
+ *    execution, and snapshot restore on unload. No load-time hooks.
  * 2. Event bus — catalog points translate intercepted calls into ordinary
  *    Cordis events. Consumers write plain `ctx.on('vendor/action', …)` (or
  *    the `ctx.forge.on(...)` sugar below), so listener registration/recycling
@@ -112,24 +140,27 @@ export class ForgeService extends Service<ForgePolicy> {
     return this.ctx.bail(name as any, event)
   }
 
-  /** Register a first-class mixin directly — no event projection, full fabric semantics. */
-  registerMixin(input: Mixin, handler: (call: any, invoke?: () => unknown) => unknown): string {
+  /**
+   * Register a first-class mixin directly — no event projection, full
+   * snapshot/restore runtime semantics. The patch is owned by the calling
+   * fiber: unload restores the exact original descriptor.
+   */
+  registerMixin(input: Mixin, handler: (call: any, invoke?: () => unknown) => unknown, options?: RuntimeMixinOptions): string {
     const mixin = defineMixin(input)
-    const fabric = this.ctx.get('fabric', false) as FabricServiceLike | undefined
-    if (typeof fabric?.register !== 'function') {
-      throw new Error(`forge: cannot register mixin "${mixin.id}" — ctx.fabric is not installed`)
-    }
     if (typeof handler !== 'function') {
       throw new Error(`forge: mixin "${mixin.id}" requires a trusted handler function`)
     }
-    fabric.register({
-      id: mixin.id,
-      target: mixin.target,
-      operation: mixin.operation,
-      priority: mixin.priority,
-      required: mixin.required,
-      handler,
-    })
+    const result = installRuntimeMixin(this.ctx, mixin, handler, options)
+    if (result.status === 'unavailable') {
+      throw new Error(`forge: cannot register mixin "${mixin.id}" — ${result.reason}`)
+    }
+    if (result.status === 'missing') {
+      throw new Error(`forge: cannot register mixin "${mixin.id}" — ${result.reason}`)
+    }
+    this.ctx.effect(() => result.dispose ?? (() => {}), `forge:mixin(${mixin.id})`)
+    if (result.status === 'pending') {
+      this.ctx.logger('forge').warn(`mixin "${mixin.id}" is pending: ${result.reason}`)
+    }
     return mixin.id
   }
 
@@ -141,11 +172,6 @@ export class ForgeService extends Service<ForgePolicy> {
     const policy = this[Service.resolveConfig]() as ForgePolicy
     const ctx = this.ctx
 
-    const backends: Record<number, Backend> = {
-      1: createGetViewBackend(),
-      2: createPrototypeBackend(),
-      3: createFabricBackend(options.fabric),
-    }
     const hooks: Hooks = {
       before: (eventCtx, event) => (eventCtx.bail as DynamicDispatch)(`${event.point}/before`, event),
       after: (eventCtx, event) => (eventCtx.emit as DynamicDispatch)(event.point, event),
@@ -158,20 +184,20 @@ export class ForgeService extends Service<ForgePolicy> {
       let record: PointRecord
       if (policy.deny?.includes(point.id)) {
         record = {
-          catalog: catalog.plugin, point: point.id, tier: point.tier, kind: point.tier === 3 ? 'mixin' : 'runtime',
+          catalog: catalog.plugin, point: point.id, tier: point.tier, source: point.source, kind: point.source.kind,
           backend: '-', status: 'denied', reason: 'denied by host policy',
           operation: point.mixin?.operation,
         }
       } else {
         const declared = point.requires ?? 'observe'
         const mutate = declared !== 'observe' && policy.allowMutate !== false
-        const backend = backends[point.tier]
+        const backend = backendForSource(point.source, options)
         const result = backend.available(ctx)
           ? backend.bind(ctx, point, hooks, { mutate })
           : { status: 'unavailable' as const, reason: `${backend.name} backend not available` }
         record = {
-          catalog: catalog.plugin, point: point.id, tier: point.tier,
-          kind: point.tier === 3 ? 'mixin' : 'runtime',
+          catalog: catalog.plugin, point: point.id, tier: point.tier, source: point.source,
+          kind: point.source.kind,
           backend: backend.name, operation: point.mixin?.operation,
           downgraded: declared !== 'observe' && !mutate || undefined,
           ...result,

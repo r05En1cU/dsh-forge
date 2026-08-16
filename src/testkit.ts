@@ -18,8 +18,8 @@ export interface ContractHarness {
 /**
  * The standard contract suite every catalog must pass:
  * each runtime-tier point binds and emits its observe event exactly once.
- * Mixin-backed points are skipped here (they require a host-wired fabric
- * bootstrap); the fabric E2E suite covers their cross-backend contract.
+ * Mixin-backed points are skipped here; `test/runtime-mixin.test.ts` covers
+ * their runtime snapshot/restore contract.
  */
 export function contractSuite(catalog: Catalog, harness: ContractHarness) {
   test(`${catalog.plugin}: catalog contract`, async () => {

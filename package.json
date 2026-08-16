@@ -1,7 +1,7 @@
 {
   "name": "dsh-forge",
   "version": "0.2.0",
-  "description": "NeoForge-style standard API layer for DeepSeek Harness plugins: first-class fabric mixins + a Cordis-native event bus",
+  "description": "NeoForge-style standard API layer for DeepSeek Harness plugins: runtime mixins with snapshot/restore + a Cordis-native event bus",
   "type": "module",
   "exports": {
     ".": {
@@ -25,19 +25,14 @@
     "node": ">=22.19.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1-0",
-    "cordis-fabric": ">=0.0.1-rc.2"
-  },
-  "peerDependenciesMeta": {
-    "cordis-fabric": {
-      "optional": true
-    }
+    "@deepseek-ai/cordis": "^4.0.1-0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@types/node": "^26.2.0",
-    "cordis-fabric": "file:research/fabric/packages/cordis-fabric",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@official/chat-runtime": "file:test/fixtures/node_modules/@official/chat-runtime",
+    "@official/chat": "file:test/fixtures/node_modules/@official/chat"
   },
   "license": "MIT",
   "packageManager": "pnpm@11.20.0",

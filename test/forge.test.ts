@@ -107,31 +107,6 @@ test('defineInjectionPoint normalizes legacy fabric into a first-class mixin', (
   assert.equal(buildPatchStubs([[point]]).length, 1)
 })
 
-test('ctx.forge.registerMixin forwards the declaration verbatim to ctx.fabric', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (patch: any) => registrations.push(patch) })
-  await ctx.plugin(createForge([]))
-  const mixin = defineMixin({
-    id: 'vendor/raw-mixin',
-    target: { module: 'vendor', versionRange: '>=1.0.0', filePath: 'lib/index.js', functionQuery: { functionName: 'fn' } },
-    operation: 'replace',
-    priority: -50,
-    required: true,
-  })
-  const handler = (_call: any, invoke: any) => invoke()
-  await ctx.plugin({
-    name: 'mixin-user',
-    inject: ['forge'],
-    apply(c: any) { c.forge.registerMixin(mixin, handler) },
-  })
-  assert.equal(registrations.length, 1)
-  assert.equal(registrations[0].id, 'vendor/raw-mixin')
-  assert.equal(registrations[0].operation, 'replace')
-  assert.equal(registrations[0].priority, -50)
-  assert.equal(registrations[0].handler, handler)
-})
-
 test('ctx.forge.on/once/emit/bail are 1:1 delegates of the official Cordis event path', async () => {
   const ctx = new Context()
   await ctx.plugin(createForge([]))
@@ -297,172 +272,6 @@ test('tier 1: consumer plugin with inject sees wrapped calls', async () => {
   assert.equal(consumerOut, '[official] via-consumer!')
   // root-level ctx.get() bypasses the waterfall — documented limit
   assert.equal(ctx.get('chat')._processMessage('via-root'), '[official] via-root')
-})
-
-// ---------- tier 3: fabric backend through a structural bridge ----------
-
-test('tier 3: explicit unavailability without the fabric bridge', async () => {
-  const ctx = new Context()
-  await ctx.plugin(createForge([helperPoint()]))
-  const record = getForgeStatus(ctx)[0]
-  assert.equal(record.status, 'unavailable')
-  assert.equal(record.backend, 'fabric')
-  assert.equal(record.kind, 'mixin')
-})
-
-test('tier 3: before operation dispatches {id}/before and rewrites arguments', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/helper', enabled: true }] })
-  await ctx.plugin(createForge([helperPoint()]))
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
-  assert.equal(registrations[0].target.module, '@official/chat')
-  assert.equal(registrations[0].operation, 'before')
-
-  const seen: unknown[] = []
-  ctx.on('official-chat/helper/before', (e) => { seen.push(e.args[0], e.mixin); e.args[0] = 'rewritten' })
-  const call = { arguments: ['original'] }
-  registrations[0].handler(call)
-  assert.deepEqual(seen, ['original', 'official-chat/helper'])
-  assert.equal(call.arguments[0], 'rewritten')
-})
-
-test('tier 3: around dispatches before + settled after; veto skips the original', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/compute', enabled: true }] })
-  await ctx.plugin(createForge([defineInjectionPoint({
-    id: 'official-chat/compute',
-    tier: 3,
-    requires: 'mutate',
-    mixin: {
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'compute' } },
-      operation: 'around',
-    },
-  })]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/compute/before', (e) => { seen.push(['before', e.args[0]]); e.args[0] = (e.args[0] as number) + 1 })
-  ctx.on('official-chat/compute', (e) => seen.push(['after', e.result]))
-
-  let invoked = 0
-  const invoke = () => ++invoked && 42
-  assert.equal(registrations[0].handler({ arguments: [21] }, invoke), 42)
-  assert.deepEqual(seen, [['before', 21], ['after', 42]])
-  assert.equal(invoked, 1)
-
-  seen.length = 0
-  ctx.on('official-chat/compute/before', (e) => { e.veto = true; e.result = 'vetoed' })
-  assert.equal(registrations[0].handler({ arguments: [21] }, invoke), 'vetoed')
-  assert.deepEqual(seen, [['before', 21]])
-  assert.equal(invoked, 1) // original did not run for the vetoed call
-})
-
-test('tier 3: replace listener owns the call; invoke delegates to the original', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/greet', enabled: true }] })
-  await ctx.plugin(createForge([defineInjectionPoint({
-    id: 'official-chat/greet',
-    tier: 3,
-    requires: 'replace',
-    mixin: {
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'greet' } },
-      operation: 'replace',
-    },
-  })]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/greet/before', (e) => {
-    seen.push(e.args[0])
-    e.result = typeof e.invoke === 'function' ? `${e.invoke()}!` : 'owned'
-  })
-  const invoke = () => 'hello'
-  assert.equal(registrations[0].handler({ arguments: ['world'] }, invoke), 'hello!')
-  assert.deepEqual(seen, ['world'])
-})
-
-test('tier 3: after operation observes and may replace the settled result', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/compute', enabled: true }] })
-  await ctx.plugin(createForge([defineInjectionPoint({
-    id: 'official-chat/compute',
-    tier: 3,
-    requires: 'mutate',
-    mixin: {
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'compute' } },
-      operation: 'after',
-    },
-  })]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/compute', (e) => { seen.push(e.result); e.result = `${e.result}-replaced` })
-  const call = { arguments: [], result: 'original' }
-  registrations[0].handler(call)
-  assert.deepEqual(seen, ['original'])
-  assert.equal(call.result, 'original-replaced')
-})
-
-test('tier 3: async around settles the observe event', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/compute', enabled: true }] })
-  await ctx.plugin(createForge([defineInjectionPoint({
-    id: 'official-chat/compute',
-    tier: 3,
-    requires: 'mutate',
-    mixin: {
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'compute' } },
-      operation: 'around',
-    },
-  })]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/compute', (e) => seen.push(e.result))
-  const result = registrations[0].handler({ arguments: [] }, async () => 'async-result')
-  assert.equal(typeof (result as PromiseLike<unknown>).then, 'function')
-  assert.equal(await result, 'async-result')
-  assert.deepEqual(seen, ['async-result'])
-})
-
-test('tier 3: host allowMutate=false downgrades every power phase to observe-only', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/helper', enabled: true }] })
-  const governed = ctx.intercept('forge', { allowMutate: false })
-  await governed.plugin(createForge([helperPoint()]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/helper/before', (e) => { seen.push(e.args[0]); e.args[0] = 'HACKED' })
-  const call = { arguments: ['clean'] }
-  registrations[0].handler(call)
-  assert.deepEqual(seen, ['clean'])
-  assert.equal(call.arguments[0], 'clean')
-  assert.equal(getForgeStatus(ctx)[0].downgraded, true)
-})
-
-test('tier 3: version drift surfaces as stale via diagnostics', async () => {
-  const ctx = new Context()
-  let installedVersion = '1.2.0'
-  ctx.provide('fabric', {
-    register: () => {},
-    remove: () => {},
-    list: () => [{ id: 'official-chat/helper', enabled: true }],
-  })
-  await ctx.plugin(createForge([helperPoint()], { fabric: { readVersion: () => installedVersion } }))
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
-  installedVersion = '2.0.0'   // official package upgraded under us
-  assert.equal(getForgeStatus(ctx)[0].status, 'stale')
-})
-
-test('tier 3: losing the bridge registration surfaces as stale', async () => {
-  const ctx = new Context()
-  let enabled = true
-  ctx.provide('fabric', {
-    register: () => {},
-    remove: () => {},
-    list: () => [{ id: 'official-chat/helper', enabled }],
-  })
-  await ctx.plugin(createForge([helperPoint()]))
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
-  enabled = false   // another owner displaced our registration
-  assert.equal(getForgeStatus(ctx)[0].status, 'stale')
 })
 
 test('consumer listeners ride the official ctx.on lifecycle (HMR dispose)', async () => {
@@ -657,21 +466,6 @@ test('interface abstraction: map exposes a stable payload instead of raw args', 
   assert.equal(ctx.get('chat').send('abstracted'), '[official] ABSTRACTED')
 })
 
-// ---------- raw Mixin[] is also an event catalog ----------
-
-test('registering a raw mixin list derives its event bus automatically', async () => {
-  const ctx = new Context()
-  const registrations: any[] = []
-  ctx.provide('fabric', { register: (p: any) => registrations.push(p), remove: () => {}, list: () => [{ id: 'official-chat/helper', enabled: true }] })
-  await ctx.plugin(createForge([helperMixin()]))
-  const seen: unknown[] = []
-  ctx.on('official-chat/helper/before', (e) => { seen.push(e.args[0]); e.args[0] = 'changed' })
-  const call = { arguments: ['original'] }
-  registrations[0].handler(call)
-  assert.deepEqual(seen, ['original'])
-  assert.equal(call.arguments[0], 'changed')
-})
-
 // ---------- the standard way to contract-test a catalog ----------
 
 contractSuite(defineCatalog({
@@ -707,4 +501,28 @@ test('satisfies supports the ranges real DSH catalogs use', async () => {
   assert.equal(satisfies('2.0.0', '^1.0.0'), false)
   assert.equal(satisfies('1.2.3', '~1.2.0'), true)
   assert.equal(satisfies('1.3.0', '~1.2.0'), false)
+})
+
+
+// ---------- optional load-time stub compilation by semantic source ----------
+
+test('buildPatchStubs compiles only fabric sources, not runtime mixins', () => {
+  const fabricPoint = defineInjectionPoint({
+    id: 'official-chat/helper',
+    source: {
+      kind: 'fabric',
+      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
+      operation: 'before',
+    },
+  })
+  const runtimePoint = defineInjectionPoint({
+    id: 'official-chat/runtime',
+    source: {
+      kind: 'mixin',
+      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
+      operation: 'before',
+    },
+  })
+  const stubs = buildPatchStubs([[fabricPoint, runtimePoint]])
+  assert.deepEqual(stubs.map((s) => s.id), ['official-chat/helper'])
 })

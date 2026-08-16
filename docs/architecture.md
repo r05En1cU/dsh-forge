@@ -1,7 +1,7 @@
-# dsh-forge 架构：Mixin 一等公民 + Cordis 原生事件总线
+# dsh-forge 架构：Advice 原语 + 语义 source + 运行期快照/恢复
 
 > 目标：让 DSH 社区插件开发者以最低学习成本、最小破坏性更新冲击开发插件；
-> 底层复用 `omdsh-dev/fabric` 的 Mixin 引擎，上层复用官方 Cordis 事件注册与 HMR。
+> 拦截逻辑默认运行期完成，官方已有 seam 时优先复用 seam。
 
 ## 1. 分层
 
@@ -13,87 +13,133 @@
 ├──────────────────────────────────────────────────────────┤
 │ 标准 API 层（dsh-forge，本仓库）                           │
 │   defineMixin       —— 一等 Mixin 声明                     │
-│   defineEventPoint  —— Mixin → 稳定事件契约                │
+│   defineEventPoint  —— 语义 source → 稳定事件契约          │
 │   defineCatalog     —— 每个官方包一份版本化 catalog         │
 │   ForgeService      —— 注册、诊断、host policy             │
-│   buildPatchStubs   —— 宿主 bootstrap 接缝                 │
+│   buildPatchStubs   —— 可选：仅 kind:'fabric' 编译 stub    │
+├──────────────────────────────────────────────────────────┤
+│ Advice 层（唯一操作原语）                                   │
+│   before/after/around/replace 全部投影为 around(proceed)    │
 ├───────────────────────────┬──────────────────────────────┤
-│ fabric 引擎（cordis-fabric）│ 运行时 fallback（tier 1/2）    │
-│ 加载期 AST 变换、优先级、   │ internal/get 消费方视图；       │
-│ bindings、HMR ownership   │ internal/service + 原型补丁     │
+│ source 后端选择             │                              │
+│ event  → 官方事件别名      │ runtime-mixin（默认 mixin）     │
+│ view   → internal/get      │   resolve → descriptor 快照    │
+│ service→ internal/service  │   → wrapper → 恢复             │
+│ fabric → 可选加载期桥      │                              │
 └───────────────────────────┴──────────────────────────────┘
 │ Cordis 内核（事件、fiber、reflect、loader HMR）             │
 └──────────────────────────────────────────────────────────┘
 ```
 
-## 2. 关键决策
+## 2. Advice：唯一拦截原语
 
-### 2.1 不另造事件发射器
+```ts
+type OperationPhases = {
+  before?(call): void
+  after?(call): unknown
+  around?(call, proceed): unknown
+}
+```
 
-事件总线直接使用 `ctx.bail` / `ctx.emit` / `ctx.on`：
+`dispatchOperation()` 是唯一 operation switch，事件路径和裸 `registerMixin` 路径都编译为 phases：
 
-- listener 随注册 fiber 自动回收——这就是官方 HMR 事件注册方式；
-- context 过滤、isolate、prepend、global 等官方语义免费保留；
-- 不引入第二个“订阅表”，不存在自定义 emitter 漏卸载问题。
+- `before` → `phases.before` → `proceed`
+- `after` → `proceed` → settle → `phases.after`
+- `around` / `replace` → `phases.around(call, proceed)`
 
-`ForgeService.on/once/emit/bail` 只是委托方法，返回值是官方 disposer。
+收益：async settle、host policy、payload 映射、`veto/invoke` 只实现一次；runtime-mixin 只负责“解析 + 快照 + 包装”。
 
-### 2.2 Mixin 声明与事件点分离
+## 3. 语义 source
 
-- `Mixin` 是可直接交给 `ctx.fabric` 的静态描述符（`id/target/operation/priority/required`），不含 handler。
-- `EventPoint` 引用一个 Mixin 并声明事件契约（`requires`、`map`、阶段）。
-- `buildPatchStubs()` 是二者到 fabric 加载期 stubs 的唯一编译函数，宿主在 `boot()` 前调用。
-- 裸 `Mixin[]` 也可以直接传给 `createForge()`：标准层自动派生事件投影，真正做到“Mixin 一等公民，事件总线可选”。
+catalog 声明意图，后端自动选择：
 
-### 2.3 tier 选择
+```ts
+source:
+  | { kind: 'event'; event: string }                          // 官方事件，零补丁
+  | { kind: 'view'; service; method }                         // 消费方视图
+  | { kind: 'service'; service; method }                      // 服务原型
+  | { kind: 'mixin'; target; operation; priority?; required? } // 运行期 mixin
+  | { kind: 'fabric'; target; operation; priority?; required? } // 可选加载期桥
+```
 
-| tier | 目标 | 后端 | 条件 |
-|---|---|---|---|
-| 1 | 消费方调用视图 | `internal/get` waterfall | 无 |
-| 2 | service 原型方法（含内部自调用） | `internal/service` + 原型补丁 | 无 |
-| 3 | 模块函数/闭包/`#private`/浏览器 | `cordis-fabric` 加载期变换 | 宿主已 bootstrap |
+旧 `tier/runtime/mixin/fabric` 字段在 `defineInjectionPoint()` 中 normalize 为 source，现有 catalog 不迁移也能跑。
 
-硬规则：**运行时可及的 service 方法不得用加载期变换直打**，除非 `engineExclusive: true` 并有文档化理由——加载期变换无法 descriptor 回滚，且跨安装组合顺序在文本期锁死。
+## 4. 运行期 Mixin
 
-### 2.4 能力与策略
+### 4.1 解析
 
-- `requires` 是能力的显式声明：`observe`（默认）/ `mutate` / `replace`。
-- 宿主通过 `ctx.intercept('forge', { deny, allowMutate })` 按子树治理。
-- `allowMutate: false` 时，before/after 收到浅拷贝，任何写入都不可回流；这是策略保证，不是约定。
+1. catalog 注册时；
+2. 官方 `internal/service` 事件（service 类晚于 forge 加载时）；
+3. `ctx.forge.status()` 的 `verify()`（模块晚于 forge import 时）。
 
-### 2.5 HMR 三段式
+解析规则：
 
-1. **消费方 listener**：官方 `ctx.on` effect。
-2. **fabric patch 注册**：`ctx.fabric.register` 的 fiber effect + same-owner transfer；新代接管，旧代卸载 no-op。
-3. **tier-2 原型代际**：`internal/service` 同步通知；`retire(oldProto) → attach(newProto)` 在同一同步窗口内完成；回滚重放旧类时恰好一次重绑。
+- `functionName/expressionName`：CJS exports 属性；
+- `className + methodName`：导出 class 的 prototype（或 static）；
+- `methodName`：唯一同名方法，多匹配要求 `className`；
+- ESM class export 可 patch prototype；ESM named export、`#private`、`astQuery` 返回 `unavailable`。
 
-### 2.6 漂移与降级
+### 4.2 快照
 
-- 定义期：错误 id、错误 operation/capability 组合、缺 target 直接 throw。
-- 绑定期：方法缺失 → `missing`；opt-out → `opted-out`；fabric 未接线 → `unavailable`。
-- 诊断期：`status()` 实时复核 fabric `list()`、`bindings()`、`readVersion()`，报告 `bound/pending/stale`。
+```ts
+const desc = Object.getOwnPropertyDescriptor(holder, key)
+```
 
-## 3. 目录
+wrapper 标记 `Symbol.for('dsh-forge.patched')`，携带 `{ id, owner, original, holder, key }`。
+
+### 4.3 修改后运行
+
+```ts
+Object.defineProperty(holder, key, { ...desc, value: wrapper })
+```
+
+### 4.4 恢复与独占
+
+- 卸载时恢复旧 descriptor。
+- **同一 `(holder, key)` 运行期全局独占**：第二个第三方包 patch 同一目标直接 loud error，不隐式链式叠加。
+- 同 mixin id + 同 owner 的重注册视为 HMR/重放；卸载后独占释放，可再次注册。
+
+HMR 分级：
+
+- service 类目标：`internal/service` 同步代际交接，新类 prototype 自动补丁；
+- 模块级函数目标：由 `forge/module/load|reload|unload` 自定义事件层驱动；宿主发布 reload 后同一同步调用内退役旧 holder、patch 新 holder；
+- 无发布者的模块级 CJS 目标：`status()/verify()` 重新解析作为兜底；
+- ESM named export / `#private` / 闭包：运行期不可达，只能走 `kind: 'fabric'` 加载期桥。
+
+## 5. 关键决策
+
+- **不另造事件发射器**：事件总线就是 `ctx.bail/emit/on`，HMR 回收、context 过滤、isolate 语义免费复用。
+- **seam-first**：审核顺序固定为官方事件 → 官方服务 → view → mixin → fabric。
+- **能力显式**：`requires: 'observe' | 'mutate' | 'replace'`；宿主 `ctx.intercept('forge', { allowMutate: false })` 降级为只读。
+- **drift 响亮**：版本漂移报 `missing/stale`；运行期不可达目标报 `unavailable`，不静默。
+
+## 6. 目录
 
 ```
 src/
-  mixin.ts           defineMixin / buildPatchStubs / 静态 stub 编译
-  registry.ts        defineEventPoint / defineCatalog / 定义期校验
-  service.ts         ForgeService：注册、诊断、事件糖、registerMixin
-  dispatch.ts        FabricCall/方法调用 → ForgeEvent 的稳定转译
+  advice.ts          OperationPhases + dispatchOperation（唯一操作原语）
+  version.ts         satisfies：保守 semver 漂移诊断
+  mixin.ts           defineMixin / buildPatchStubs（可选 fabric 出口）
+  registry.ts        defineEventPoint / defineCatalog / source normalize
+  service.ts         ForgeService：source → backend、诊断、registerMixin
+  dispatch.ts        事件构造 + tier 1/2 的 dispatchCall
   backends/
-    fabric.ts        tier 3：ctx.fabric 注册 + operation → 事件阶段
-    prototype.ts     tier 2：原型补丁 + internal/service + HMR 代际
-    getview.ts       tier 1：internal/get 消费方视图
-  testkit.ts         contractSuite：一个 catalog 一次调用的标准验证
+    event-alias.ts   event source
+    getview.ts       view source
+    prototype.ts     service source
+    runtime-mixin.ts class/service mixin：resolve + 快照 + wrapper + 独占冲突
+    module-mixin.ts  functionName/expressionName mixin：消费模块生命周期事件
+    fabric.ts        fabric source：可选加载期桥
+  module-events.ts   forge/module/load|reload|unload 自定义事件层
+  testkit.ts         contractSuite
 test/
-  forge.test.ts      41 项中的运行时/注册表/HMR/policy/事件糖部分
-  fabric-e2e.test.ts 真实 cordis-fabric 引擎 E2E
-research/fabric/     vendored omdsh-dev/fabric（build 后本地使用）
+  forge.test.ts             tier 1/2、HMR、policy、registry、stub 编译
+  runtime-mixin.test.ts     运行期 mixin、冲突 loud error、语义 source
+research/fabric/           vendored 参考，仅可选加载期桥使用
 ```
 
-## 4. 尚未做 / 明确非目标
+## 7. 非目标
 
-- 不提供注解/decorator 版 `@SubscribeEvent`：JS/TS 生态下 `ctx.on` 就是官方方式，装饰器只是无收益的平行入口。
-- 不镜像 `ctx.slots` / `ctx.tools` 等已有官方注册面；官方已有标准 API 时一律用官方 API。
-- 浏览器端 tier-3 目标复用 fabric 的 browser transform，标准层只负责事件契约不变。
+- 不提供 `@SubscribeEvent` 装饰器：`ctx.on` 是官方方式。
+- 不镜像 `ctx.slots` / `ctx.tools` 等已有官方注册面。
+- 浏览器端运行期注入不在本层范围；浏览器目标走 `kind: 'fabric'` 可选桥。

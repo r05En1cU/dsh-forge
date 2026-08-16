@@ -1,7 +1,7 @@
 import type { CatalogInput, FabricOperation, FabricTargetRef, InjectionPointInput, Mixin, MixinRef } from './types.ts'
 
 /** Same id grammar as cordis-fabric: one or more `/`-separated namespace segments. */
-export const MIXIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:+-]*(?:\/[A-Za-z0-9][A-Za-z0-9._:+-]*)+$/
+export const MIXIN_ID_RE = /^[A-Za-z0-9_][A-Za-z0-9._:+-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._:+-]*)+$/
 
 /**
  * Structural mirror of cordis-fabric's FabricPatchStub — intentionally no
@@ -75,17 +75,18 @@ function toStub(mixin: Mixin): FabricPatchStubLike {
 }
 
 /**
- * Compile catalogs / event points / raw mixins into static fabric patch stubs
- * — the host bootstrap seam. Feed the result to cordis-fabric's
- * `bootstrapFabric()` (or merge into the host's `config.fabric.patches`)
- * BEFORE any target module is imported:
+ * Optional compatibility exit: compile catalogs / event points / raw mixins
+ * into static cordis-fabric patch stubs. The default runtime-mixin backend
+ * does NOT need this — only targets that are runtime-unreachable (ESM
+ * module-level functions, `#private`, closures, browser bundles) still use a
+ * load-time bridge:
  *
  *   import { bootstrapFabric } from 'cordis-fabric'
  *   const disposeHooks = bootstrapFabric(buildPatchStubs([catalog]))
  *
- * Only mixin-backed (tier-3) declarations produce stubs; runtime points need
- * no load-time work. `required` mixins fail startup loudly when they bound
- * nothing.
+ * Only `kind: 'fabric'` points (or legacy `fabric` fields) produce stubs;
+ * runtime mixins need no load-time work. `required` mixins fail startup
+ * loudly when they bound nothing.
  */
 export function buildPatchStubs(inputs: readonly (CatalogInput | InjectionPointInput[] | Mixin | Mixin[])[]): FabricPatchStubLike[] {
   const stubs: FabricPatchStubLike[] = []
@@ -108,14 +109,20 @@ export function buildPatchStubs(inputs: readonly (CatalogInput | InjectionPointI
         for (const mixin of input as Mixin[]) push(normalizeMixin(mixin.id, mixin))
       } else {
         for (const point of input as InjectionPointInput[]) {
-          const mixin = point.mixin ?? point.fabric
-          if (mixin) push(normalizeMixin(point.id, mixin as MixinRef), point.engineExclusive)
+          if (point.source?.kind === 'fabric') {
+            push(normalizeMixin(point.id, point.source), point.engineExclusive)
+          } else if (point.fabric) {
+            push(normalizeMixin(point.id, point.fabric), point.engineExclusive)
+          }
         }
       }
     } else if ('points' in input) {
       for (const point of input.points) {
-        const mixin = point.mixin ?? point.fabric
-        if (mixin) push(normalizeMixin(point.id, mixin as MixinRef), point.engineExclusive)
+        if (point.source?.kind === 'fabric') {
+          push(normalizeMixin(point.id, point.source), point.engineExclusive)
+        } else if (point.fabric) {
+          push(normalizeMixin(point.id, point.fabric), point.engineExclusive)
+        }
       }
     } else {
       const mixin = input as Mixin

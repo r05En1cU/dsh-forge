@@ -11,21 +11,20 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.1
         version: 4.0.1
+      '@official/chat':
+        specifier: file:test/fixtures/node_modules/@official/chat
+        version: file:test/fixtures/node_modules/@official/chat
+      '@official/chat-runtime':
+        specifier: file:test/fixtures/node_modules/@official/chat-runtime
+        version: file:test/fixtures/node_modules/@official/chat-runtime
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
-      cordis-fabric:
-        specifier: file:research/fabric/packages/cordis-fabric
-        version: file:research/fabric/packages/cordis-fabric(@deepseek-ai/cordis@4.0.1)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
 
 packages:
-
-  '@apm-js-collab/code-transformer@0.18.1':
-    resolution: {integrity: sha512-u1Hb6bHjWtkSpiprwVP6YaHC1DTN4RAU3zYkUDUe7WMnJwdyU1pwTL9dFKiSJB9IiLue/EQovmyx6xhU7FFtAQ==}
-    hasBin: true
 
   '@deepseek-ai/cordis@4.0.1':
     resolution: {integrity: sha512-YBdskTU2Po1kru3GgcUWUbkTsPMA9LkSQDAY8rBkFJeajdgcQad3QPJZE26JyK99Xb6HaASvoXg2DSUTeN/0Nw==}
@@ -42,11 +41,14 @@ packages:
   '@deepseek-ai/cosmokit@1.8.2':
     resolution: {integrity: sha512-muBOKtSrUKU5m/xpq8ZXWL6hQ/jgd4PhU2PqH97bcxIiLEJfNwZOGQEx4t/aS/GgxRAR+ra9pMHPMtTHU4sqqA==}
 
+  '@official/chat-runtime@file:test/fixtures/node_modules/@official/chat-runtime':
+    resolution: {directory: test/fixtures/node_modules/@official/chat-runtime, type: directory}
+
+  '@official/chat@file:test/fixtures/node_modules/@official/chat':
+    resolution: {directory: test/fixtures/node_modules/@official/chat, type: directory}
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
-
-  '@types/estree@1.0.9':
-    resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
   '@types/node@26.2.0':
     resolution: {integrity: sha512-5IviulTZeRNp2vAJ514cc/HUlY5nZ9fCbq9DMyC52BrhFZACo3nI0R7qBxhQmo/d27NFe96ur/b7Wwxklda+kg==}
@@ -171,94 +173,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  astring@1.9.0:
-    resolution: {integrity: sha512-LElXdjswlqjWrPpJFg1Fx4wpkOCxj1TDHlSV4PlaRxHGWko024xICaa97ZkMfs6DRKlCguiAI+rbXv5GWwXIkg==}
-    hasBin: true
-
-  cordis-fabric@file:research/fabric/packages/cordis-fabric:
-    resolution: {directory: research/fabric/packages/cordis-fabric, type: directory}
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1-0
-
-  esquery@1.7.0:
-    resolution: {integrity: sha512-Ap6G0WQwcU/LHsvLwON1fAQX9Zp0A2Y6Y/cJBl9r/JbW90Zyg4/zbG6zzKa2OTALELarYHmKu0GhpM5EO+7T0g==}
-    engines: {node: '>=0.10'}
-
-  estraverse@5.3.0:
-    resolution: {integrity: sha512-MMdARuVEQziNTeJD8DgMqmhwR11BRQ/cBP+pLtYdSTnf3MIO8fFeiINEbX36ZdNlfU/7A9f3gUw49B3oQsvwBA==}
-    engines: {node: '>=4.0'}
-
-  meriyah@6.1.4:
-    resolution: {integrity: sha512-Sz8FzjzI0kN13GK/6MVEsVzMZEPvOhnmmI1lU5+/1cGOiK3QUahntrNNtdVeihrO7t9JpoH75iMNXg6R6uWflQ==}
-    engines: {node: '>=18.0.0'}
-
-  module-details-from-path@1.0.4:
-    resolution: {integrity: sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w==}
-
-  node-addon-native-custom-loader@0.1.5:
-    resolution: {integrity: sha512-rL0XXRytayIChYf1xaG9/1NzGBRTyFkQTIpn+MDz/hpr0PZw1a9PZIoH9HlYfagNawhXU+jfN650EvoSIvR7Vw==}
-    engines: {node: '>=20'}
-
-  node-addon-require-builtin-darwin-arm64@0.1.5:
-    resolution: {integrity: sha512-MZ5RyGhuU7DTbwuNpOQW81/ep8n5Yd5YlZa6dWiEfJEh+01Dl4cCKGmMCWNgb0VtqAImRtAOtmZIPtwngiemKQ==}
-    engines: {node: '>=20'}
-    cpu: [arm64]
-    os: [darwin]
-
-  node-addon-require-builtin-darwin-x64@0.1.5:
-    resolution: {integrity: sha512-wdCSPn49AdNZ2EXHQqswiXk1cROFe9zSRaAX8PwQLxmjdLt+xZF7vZP6VlqgXm+VAOHv98q8kp9m7mO9jY3OgQ==}
-    engines: {node: '>=20'}
-    cpu: [x64]
-    os: [darwin]
-
-  node-addon-require-builtin-linux-arm64-gnu@0.1.5:
-    resolution: {integrity: sha512-hCqzKpQiknDDv6rUdZqrxCBXROg/uUruO0geUuZsdM9M/Lds45gSb4bDE958HlPaCvrDyR0wTHl3II8A7yQeew==}
-    engines: {node: '>=20'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  node-addon-require-builtin-linux-x64-gnu@0.1.5:
-    resolution: {integrity: sha512-lgP+ruwWXbcXDslhp5uIc+dFgzITEGPZ4E50WdHGt/OzcoVhN6y5z72pRRvxy8DE661//QxqmCLe72rS3SVg+w==}
-    engines: {node: '>=20'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  node-addon-require-builtin-win32-arm64-msvc@0.1.5:
-    resolution: {integrity: sha512-KEO2eWS4lvZg6JmPPz04OdI4Ojrc7YzOs++4r6VnvwsqYN2r6mjGSGpouQkk8J2eLXBzC7X/D9wYTbUuQS8u1Q==}
-    engines: {node: '>=20'}
-    cpu: [arm64]
-    os: [win32]
-
-  node-addon-require-builtin-win32-ia32-msvc@0.1.5:
-    resolution: {integrity: sha512-iSC988EqZm5XbKWp/giW6K6EBRTrHt/YQbAkKsZLglt7PplmvvrZ7C3tUsyh1wVxUTYAaxFdE2xbqSdpw0rb6g==}
-    engines: {node: '>=20 <23'}
-    cpu: [ia32]
-    os: [win32]
-
-  node-addon-require-builtin-win32-x64-msvc@0.1.5:
-    resolution: {integrity: sha512-pjuco/ESU3ChIp7WwacWfY2ENu2K5rGAgqjcXedoiFcTrjTf5Ln/miKSuNfE6IiuJ7tfMTJH6VH5hq+C1Y8JMQ==}
-    engines: {node: '>=20'}
-    cpu: [x64]
-    os: [win32]
-
-  node-addon-require-builtin@0.1.5:
-    resolution: {integrity: sha512-isaquiStlp7qdFpaffy+2ssJPUR/kLPRE5gqfeWbb0Ahph9H7O3BOFwThqkVaTrxfpnjrQauxlOEgvzD+snhUg==}
-    engines: {node: '>=20'}
-
-  semifies@1.0.0:
-    resolution: {integrity: sha512-xXR3KGeoxTNWPD4aBvL5NUpMTT7WMANr3EWnaS190QVkY52lqqcVRD7Q05UVbBhiWDGWMlJEUam9m7uFFGVScw==}
-
-  source-map@0.6.1:
-    resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
-    engines: {node: '>=0.10.0'}
-
-  typescript@6.0.3:
-    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
-    engines: {node: '>=14.17'}
-    hasBin: true
-
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -269,15 +183,6 @@ packages:
 
 snapshots:
 
-  '@apm-js-collab/code-transformer@0.18.1':
-    dependencies:
-      '@types/estree': 1.0.9
-      astring: 1.9.0
-      esquery: 1.7.0
-      meriyah: 6.1.4
-      semifies: 1.0.0
-      source-map: 0.6.1
-
   '@deepseek-ai/cordis@4.0.1':
     dependencies:
       '@deepseek-ai/cosmokit': 1.8.2
@@ -285,9 +190,11 @@ snapshots:
 
   '@deepseek-ai/cosmokit@1.8.2': {}
 
-  '@standard-schema/spec@1.1.0': {}
+  '@official/chat-runtime@file:test/fixtures/node_modules/@official/chat-runtime': {}
 
-  '@types/estree@1.0.9': {}
+  '@official/chat@file:test/fixtures/node_modules/@official/chat': {}
+
+  '@standard-schema/spec@1.1.0': {}
 
   '@types/node@26.2.0':
     dependencies:
@@ -352,81 +259,6 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
-
-  astring@1.9.0: {}
-
-  cordis-fabric@file:research/fabric/packages/cordis-fabric(@deepseek-ai/cordis@4.0.1):
-    dependencies:
-      '@apm-js-collab/code-transformer': 0.18.1
-      '@deepseek-ai/cordis': 4.0.1
-      module-details-from-path: 1.0.4
-      node-addon-require-builtin: 0.1.5
-      typescript: 6.0.3
-
-  esquery@1.7.0:
-    dependencies:
-      estraverse: 5.3.0
-
-  estraverse@5.3.0: {}
-
-  meriyah@6.1.4: {}
-
-  module-details-from-path@1.0.4: {}
-
-  node-addon-native-custom-loader@0.1.5: {}
-
-  node-addon-require-builtin-darwin-arm64@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-darwin-x64@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-linux-arm64-gnu@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-linux-x64-gnu@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-win32-arm64-msvc@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-win32-ia32-msvc@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin-win32-x64-msvc@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optional: true
-
-  node-addon-require-builtin@0.1.5:
-    dependencies:
-      node-addon-native-custom-loader: 0.1.5
-    optionalDependencies:
-      node-addon-require-builtin-darwin-arm64: 0.1.5
-      node-addon-require-builtin-darwin-x64: 0.1.5
-      node-addon-require-builtin-linux-arm64-gnu: 0.1.5
-      node-addon-require-builtin-linux-x64-gnu: 0.1.5
-      node-addon-require-builtin-win32-arm64-msvc: 0.1.5
-      node-addon-require-builtin-win32-ia32-msvc: 0.1.5
-      node-addon-require-builtin-win32-x64-msvc: 0.1.5
-
-  semifies@1.0.0: {}
-
-  source-map@0.6.1: {}
-
-  typescript@6.0.3: {}
 
   typescript@7.0.2:
     optionalDependencies:

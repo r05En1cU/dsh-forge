@@ -12,9 +12,15 @@ export { ForgeService } from './service.ts'
 export type { ForgePolicy, PointRecord, RegisterOptions } from './service.ts'
 export { contractSuite } from './testkit.ts'
 export type { ContractHarness } from './testkit.ts'
-export { satisfies } from './backends/fabric.ts'
+export { createRuntimeMixinBackend, installRuntimeMixin } from './backends/runtime-mixin.ts'
+export { createModuleMixinBackend } from './backends/module-mixin.ts'
+export { MODULE_EVENTS, trackModule, reloadModule, untrackModule } from './module-events.ts'
+export type { ModuleRecord } from './module-events.ts'
+export { createFabricBackend } from './backends/fabric.ts'
+export { satisfies } from './version.ts'
+export type { RuntimeMixinOptions } from './backends/runtime-mixin.ts'
 export type { FabricBackendOptions } from './backends/fabric.ts'
-export { kOptOut } from './types.ts'
+export { kOptOut, kPatched } from './types.ts'
 export type {
   Backend,
   BindOptions,
@@ -28,5 +34,6 @@ export type {
   InjectionPoint,
   Mixin,
   MixinRef,
+  PointSource,
   RuntimeTarget,
 } from './types.ts'
