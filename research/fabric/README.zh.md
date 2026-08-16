@@ -53,7 +53,7 @@ bundle 载体加入两个默认禁用的 profile 行:
 
 Patch handler 是通过 `ctx.fabric.register()` 注册的可信代码;YAML 或模型输入永远不会反序列化可执行 handler。服务支持 Node ESM/CommonJS 加载期变换、browser 构建期变换、优先级组合、HMR 安全销毁、静态目标校验、generator 委托和 watched browser transforms。
 
-新的 bundle 层只负责组合 package rows。三包要真正运行所需的 launcher/bootstrap 与 browser build 接缝是宿主侧代码,不属于三包,以 `patches/fabric-host-integration.patch` 携带(对快照 `9f9e2782a4`(0813)的 deepseek-harness checkout 执行 `git apply`;见 `patches/README.md`)。已到拆分提交的宿主无需任何补丁。
+新的 bundle 层只负责组合 package rows。三包要真正运行所需的 launcher/bootstrap 接线由即插即用的 `fabric-dsh` 命令在启动时注入——宿主源码完全不动(宿主补丁现已为空;见 `patches/README.md`)。直接跑官方 `dsh` 只走官方代码;`fabric-dsh` 注入 loader hooks。
 
 ## 安装
 
@@ -67,27 +67,26 @@ dsh plugin --profile web add github:dsh-external/fabric
 
 仓库不带任何构建产物:三包的 `prepare` 脚本在 Git 安装时构建 `lib/`(pnpm 会安装该包的 devDependencies 并在消费者机器上运行 `prepare`)。安装跟随 `main`。
 
-Fabric 层要真正生效,宿主 launcher 必须在任何目标模块导入前调用三包的 bootstrap。官方 DSH master 目前没有这一步。两种宿主情形:
-
-**源码宿主(现在就能完整可用)** — deepseek-harness checkout + 宿主补丁(`patches/fabric-host-integration.patch`,见 `patches/README.md`)。补丁接好 launcher、browser build 接缝和 tool-cordis catalog;CLI 的三包依赖是 git spec,纯官方 checkout 在 `pnpm install` 时就能拉取并现造三包:
+Fabric 层要真正生效,load-time 变换钩子必须在任何目标模块导入前存在。`fabric-dsh` 启动器做到这一点,宿主零改动。它随 bundle 一起装进 profile,所以 profile 装好 bundle 后不再需要 bundle 仓库检出,直接跑 profile 自带的 bin:
 
 ```sh
-git clone <deepseek-harness> && cd deepseek-harness
-pnpm run patch:host -- .          # 在本 bundle 仓库里执行;或 git apply 补丁
-pnpm install --no-frozen-lockfile # 首次安装:lockfile 新增两个 git 依赖,
-                                  # 从 GitHub 拉三包,prepare 现造 lib
-pnpm run build
-pnpm dsh web            # web-app bundle 层已组合 fabric 两行
+# 针对纯官方 deepseek-harness checkout
+$DSH_HOME/profiles/web/node_modules/.bin/fabric-dsh \
+  --harness <deepseek-harness-checkout> web --port 8000
 ```
 
-或者一步完成(在本 bundle 仓库里执行):`pnpm run install:host -- <deepseek-harness-checkout>`(打补丁 + 安装 + 构建)。
+(DSH_HOME 与 profile 名从安装路径自身推导;开发形态 `node <bundle-repo>/scripts/fabric-dsh.mjs --harness <checkout> --profile web ...` 仍然可用。)
 
-**npm 安装的官方 `dsh`** — 无法打源码补丁(CLI 是预构建产物);等官方仓库合入接线后即可(拆分提交 `65bcaf9902` 已包含)。
+首次准备(在本 bundle 仓库里执行):`pnpm run install:host -- <deepseek-harness-checkout> [--dsh-home <目录>]`——宿主装依赖 + 构建、profile 播种(git 依赖三包需要的 pnpm 设置)、官方插件通道装 bundle(`dsh plugin --profile web add github:dsh-external/fabric`,并把 `cordis-fabric-bundle` 并入 `dsh.profile.bundles`)、启用 `cordis-fabric-dsh` 行。宿主补丁为空,不打补丁、不建分支。
+
+`fabric-dsh` 组合 profile 的补丁层,把合成的 descriptors 写入 `$DSH_FABRIC_CONFIG`,通过 `--import` 注入 `packages/cordis-fabric/preload.mjs`(在 CLI 入口加载前注册 loader hooks;三包从 profile 解析,保证 hooks 与插件共享同一模块实例——preload 先于 CLI 自身的 boot 执行,故先 heal profile 的模块回退),钉住 tsx tsconfig,并在缺省时追加 profile 的 pnpm 设置(`blockExoticSubdeps: false`、`dangerouslyAllowAllBuilds: true`)。声明 `config.fabric.patches` 的行即 Fabric 依赖行:默认 disabled,fabric-dsh 用生成的 overlay 启用它——普通 `dsh` 启动完全跳过这类行(应用照常运行、依赖插件不加载),fabric-dsh 则在 hooks 就位后加载它们,Host 插件在启动后一个 tick 校验 required 绑定;在普通 `dsh` 下显式启用 Fabric 依赖行会直接拒启。
+
+**npm 安装的官方 `dsh`** — 跑不了 `fabric-dsh`(CLI 是预构建产物,没有可 preload 的源码入口);等官方仓库合入接线后即可(拆分提交 `65bcaf9902` 已包含)。
 
 两个前提:
 
 - pnpm 通过 SSH 解析 GitHub 依赖,安装机器需要对 `dsh-external/fabric` 有 GitHub SSH 访问权;
-- load-time 变换钩子必须在任何目标模块导入前由宿主 launcher 安装;见上面的宿主情形。
+- 启动必须走 `fabric-dsh`(直接跑 `dsh` 不激活 Fabric hooks);见上面。
 
 ## 开发
 
@@ -109,4 +108,4 @@ pnpm run build
 
 - Node 加载期变换要求预编译 JavaScript;browser transform 会在应用 handler 前剥离 TypeScript。
 - 浏览器面分布在两个双面包中(`cordis-fabric/client` 提供 bridge 与 service,`cordis-fabric-dsh/client` 提供 Mod-facing facade);需要完整 SlotMap 类型的 consumer 应直接使用 DSH authoritative slot service。
-- npm 安装的官方 `dsh` 上,load-time 与 browser build 接缝不生效(CLI 预构建,打不了源码补丁);这类宿主要等官方合入接线。源码宿主用 `patches/fabric-host-integration.patch` 补齐接缝(见 `patches/README.md`)。
+- npm 安装的官方 `dsh` 上无法运行 `fabric-dsh`(CLI 预构建,没有源码入口可 preload);这类宿主要等官方合入接线。源码宿主一律通过 `fabric-dsh` 启动(见安装章节)。
