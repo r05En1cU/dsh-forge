@@ -72,7 +72,6 @@ export const recomposeMixin = defineMixin({
     },
   },
   operation: 'around',                  // before | after | around | replace
-  priority: 100,                        // 越大越外层
 })
 ```
 
@@ -153,7 +152,6 @@ defineEventPoint({
       functionQuery: { className: 'AgentPresets', methodName: 'recompose', kind: 'Method' },
     },
     operation: 'around',
-    priority: 100,
   },
   map: {
     toEvent: (args) => ({ to: args[0] }),
