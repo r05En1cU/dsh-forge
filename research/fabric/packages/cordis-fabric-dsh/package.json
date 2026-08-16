@@ -1,0 +1,105 @@
+{
+  "name": "cordis-fabric-dsh",
+  "description": "DSH integrations for the Cordis Fabric layer: DSH-facing facades, the package invariant, and the DSH profile bootstrap that composes the pure fabric hooks",
+  "version": "0.0.1-rc.2",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./agent": {
+      "types": "./lib/types/agent.d.ts",
+      "default": "./lib/agent.js"
+    },
+    "./tools": {
+      "types": "./lib/types/tools.d.ts",
+      "default": "./lib/tools.js"
+    },
+    "./prompt": {
+      "types": "./lib/types/prompt.d.ts",
+      "default": "./lib/prompt.js"
+    },
+    "./commands": {
+      "types": "./lib/types/commands.d.ts",
+      "default": "./lib/commands.js"
+    },
+    "./profile-bootstrap": {
+      "types": "./lib/types/profile-bootstrap.d.ts",
+      "default": "./lib/profile-bootstrap.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/agent.js",
+    "lib/tools.js",
+    "lib/prompt.js",
+    "lib/commands.js",
+    "lib/profile-bootstrap.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "tsc -b && tsdown --config tsdown.config.ts",
+    "typecheck": "tsc --pretty false",
+    "prepare": "tsc -b && tsdown --config tsdown.config.ts"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1-0",
+    "cordis-fabric": "^0.0.1-rc.2",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-commands": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-invariants": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-client-ui-commands": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1-0",
+    "cordis-fabric": "^0.0.1-rc.2",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-commands": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-invariants": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-client-ui-commands": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.0",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@deepseek-ai/dsh-client-ui-input-trigger": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-scope": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-timeout": "^0.1.0-rc.0",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.0",
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
