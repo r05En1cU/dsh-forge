@@ -1,4 +1,4 @@
-# dsh-forge
+# dsh-neoforge
 
 面向 DeepSeek Harness（DSH）插件开发的**类 NeoForge 标准 API 层**：
 
