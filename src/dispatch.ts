@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ForgeEvent, Hooks, InjectionPoint } from './types.ts'
+import type { NeoForgeEvent, Hooks, InjectionPoint } from './types.ts'
 
 interface EventExtras {
   service?: string
@@ -11,8 +11,8 @@ interface EventExtras {
 }
 
 /** Build the event object for one intercepted call (payload via `map.toEvent`). */
-export function createForgeEvent(point: InjectionPoint, extra: EventExtras): ForgeEvent {
-  const event: ForgeEvent = { point: point.id, args: extra.args, result: undefined }
+export function createNeoForgeEvent(point: InjectionPoint, extra: EventExtras): NeoForgeEvent {
+  const event: NeoForgeEvent = { point: point.id, args: extra.args, result: undefined }
   if (extra.mixin !== undefined) event.mixin = extra.mixin
   if (extra.service !== undefined) event.service = extra.service
   if (extra.method !== undefined) event.method = extra.method
@@ -23,7 +23,7 @@ export function createForgeEvent(point: InjectionPoint, extra: EventExtras): For
 }
 
 /** Shallow copy that can be handed to observe-only listeners. */
-export function detachedEvent(event: ForgeEvent): ForgeEvent {
+export function detachedEvent(event: NeoForgeEvent): NeoForgeEvent {
   return {
     ...event,
     args: [...event.args],
@@ -47,7 +47,7 @@ export function dispatchCall(
   hooks: Hooks,
   point: InjectionPoint,
   eventCtx: Context,
-  event: ForgeEvent,
+  event: NeoForgeEvent,
   invoke: (args: unknown[]) => unknown,
   mutate: boolean,
 ): unknown {

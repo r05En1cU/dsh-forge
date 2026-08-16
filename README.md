@@ -1,11 +1,11 @@
-# dsh-forge
+# dsh-neoforge
 
 面向 DeepSeek Harness（DSH）插件开发的**类 NeoForge 标准 API 层**：
 
 - **语义化 source，先 seam 后 mixin**：catalog 作者声明 `event / service / view / mixin / fabric`，后端自动选择；官方已有事件或服务方法时零补丁。
 - **Mixin 是一等公民**：`defineMixin()` 是显式、可版本治理的织入声明；默认在**运行期**解析目标、保留旧快照、执行修改后的包装，卸载时恢复旧快照——不需要宿主安装任何加载期 hooks。
 - **运行期目标全局独占**：同一目标被多个第三方包 patch 时直接 loud error，不做隐式链式叠加。
-- **事件总线复用官方 HMR**：`ctx.on('vendor/action', handler)` / `ctx.forge.on(...)` 就是官方 Cordis 事件注册，fiber 卸载自动回收 listener。
+- **事件总线复用官方 HMR**：`ctx.on('vendor/action', handler)` / `ctx.neoforge.on(...)` 就是官方 Cordis 事件注册，fiber 卸载自动回收 listener。
 
 ```
 语义 source
@@ -27,13 +27,13 @@
 ### 1. catalog 作者：语义 source + 稳定事件
 
 ```ts
-import { defineCatalog, defineEventPoint } from 'dsh-forge'
-import type { ForgeEvent } from 'dsh-forge'
+import { defineCatalog, defineEventPoint } from 'dsh-neoforge'
+import type { NeoForgeEvent } from 'dsh-neoforge'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'agent-preset/switch'(event: ForgeEvent<{ to: string }>): void
-    'agent-preset/switch/before'(event: ForgeEvent<{ to: string }>): void
+    'agent-preset/switch'(event: NeoForgeEvent<{ to: string }>): void
+    'agent-preset/switch/before'(event: NeoForgeEvent<{ to: string }>): void
   }
 }
 
@@ -67,10 +67,10 @@ export default defineCatalog({
 ### 2. 装配 catalog
 
 ```ts
-import { createForge } from 'dsh-forge'
+import { createNeoForge } from 'dsh-neoforge'
 import agentCatalog from './catalogs/agent.ts'
 
-ctx.plugin(createForge(agentCatalog))
+ctx.plugin(createNeoForge(agentCatalog))
 ```
 
 ### 3. 社区插件：零 mixin 概念
@@ -100,7 +100,7 @@ export function apply(ctx) {
 **冲突策略**：目标 `(holder, key)` 运行期全局独占。第二个第三方包尝试 patch 同一目标时注册直接抛错：
 
 ```text
-forge: runtime mixin "b" conflicts with "a" on Object.helper —
+neoforge: runtime mixin "b" conflicts with "a" on Object.helper —
 a runtime patch target is exclusive
 ```
 
@@ -117,7 +117,7 @@ a runtime patch target is exclusive
 | ESM named export 模块级函数 | ❌ `unavailable` | namespace 绑定运行期不可写 |
 | `#private`、闭包、`astQuery` | ❌ `unavailable` | 运行期原理性不可达 |
 
-不可达目标不会静默假装成功：`ctx.forge.status()` 明确报告 `bound / pending / missing / unavailable / stale`。
+不可达目标不会静默假装成功：`ctx.neoforge.status()` 明确报告 `bound / pending / missing / unavailable / stale`。
 
 ## Advice：唯一拦截原语
 
@@ -149,7 +149,7 @@ type OperationPhases = {
 - **稳定事件面**：事件名是 catalog 的公共契约，官方方法改名/改签名只改 catalog。
 - **版本治理**：`target.versionRange` + 自动读取目标包 `package.json`（或注入 `readVersion`）。
 - **契约测试**：`contractSuite(catalog, harness)` —— 一次安装、一次调用、断言事件恰好一次。
-- **默认观察、显式写入**：`requires: 'mutate' | 'replace'` 是 review-listed 能力；宿主可 `ctx.intercept('forge', { allowMutate: false })` 降级为只读。
+- **默认观察、显式写入**：`requires: 'mutate' | 'replace'` 是 review-listed 能力；宿主可 `ctx.intercept('neoforge', { allowMutate: false })` 降级为只读。
 
 ## 模块级函数 mixin：自定义事件层
 
@@ -157,14 +157,14 @@ type OperationPhases = {
 
 | 事件 | 语义 |
 |---|---|
-| `forge/module/load` | 模块 handle 首次可用 → 解析并 patch |
-| `forge/module/reload` | 重新求值产生新 exports holder → 退役旧快照、patch 新 holder |
-| `forge/module/unload` | 模块句柄失效 → 恢复当前快照，回到 pending |
+| `neoforge/module/load` | 模块 handle 首次可用 → 解析并 patch |
+| `neoforge/module/reload` | 重新求值产生新 exports holder → 退役旧快照、patch 新 holder |
+| `neoforge/module/unload` | 模块句柄失效 → 恢复当前快照，回到 pending |
 
 宿主 / loader / bundle 刷新器只需发布：
 
 ```ts
-import { trackModule, reloadModule, untrackModule } from 'dsh-forge'
+import { trackModule, reloadModule, untrackModule } from 'dsh-neoforge'
 
 trackModule(ctx, {
   id: '@pkg/lib/index.js',      // 与 mixin target 的 module/filePath 对应
@@ -186,74 +186,124 @@ untrackModule(ctx, '@pkg/lib/index.js')
 ## HMR 语义
 
 - **下游监听器**：官方 `ctx.on`，loader 卸载旧 fiber 时自动回收。
-- **catalog/forge 插件自身**：注册是 `ctx.effect`；卸载恢复快照，重载重新注册。
+- **catalog/neoforge 插件自身**：注册是 `ctx.effect`；卸载恢复快照，重载重新注册。
 - **service 类目标**：完整代际 HMR。`internal/service` 同步通知，新类 prototype 在同一窗口内完成 `retire(old) → attach(new)`。
-- **模块级 CJS 目标**：无官方“模块被重新求值”事件，运行期无法自动感知；`getForgeStatus(ctx)` / `status()` 会重新解析已绑定目标，发现新 exports holder 后自动退役旧快照、补丁新 holder。
+- **模块级 CJS 目标**：无官方“模块被重新求值”事件，运行期无法自动感知；`getNeoForgeStatus(ctx)` / `status()` 会重新解析已绑定目标，发现新 exports holder 后自动退役旧快照、补丁新 holder。
 - **ESM named export / `#private` / 闭包**：运行期不可达，仍走 `kind: 'fabric'` 可选加载期桥。
 
 ## 服务与治理
 
-`ForgeService` 是标准 Cordis 服务（`ctx.forge`）：
+`NeoForgeService` 是标准 Cordis 服务（`ctx.neoforge`）：
 
 ```ts
-ctx.intercept('forge', { deny: ['vendor/unsafe-point'] })
-ctx.intercept('forge', { allowMutate: false })
+ctx.intercept('neoforge', { deny: ['vendor/unsafe-point'] })
+ctx.intercept('neoforge', { allowMutate: false })
 
-ctx.forge.register(catalog)         // fiber-scoped 注册
-ctx.forge.registerMixin(mixin, h)   // 裸 mixin 运行期注册
-ctx.forge.status()                  // 每个注入点的 source/后端/绑定/漂移诊断
-ctx.forge.on(name, listener)        // = ctx.on，官方 HMR 事件路径
+ctx.neoforge.register(catalog)         // fiber-scoped 注册
+ctx.neoforge.registerMixin(mixin, h)   // 裸 mixin 运行期注册
+ctx.neoforge.status()                  // 每个注入点的 source/后端/绑定/漂移诊断
+ctx.neoforge.on(name, listener)        // = ctx.on，官方 HMR 事件路径
 ```
 
 旧 catalog 的 `tier/runtime/mixin/fabric` 字段会 normalize 为语义 source，现有声明无需迁移。
 
+## 统一 UI 服务：page → layer → slot → component
+
+`dsh-neoforge/ui` 是一个纯 Cordis、无 Node builtin 的渲染无关 UI 层。插件只需 `inject: ['ui']`：
+
+```ts
+const store = ctx.ui.state({
+  id: 'feed',
+  init: () => ({ items: [] }),
+  actions: {
+    push(draft, item) { draft.items.push(item) },
+  },
+})
+
+ctx.ui.page({ id: 'workspace', title: 'Workspace' })
+ctx.ui.layer({ id: 'webui', kind: 'react-dom' })
+
+ctx.ui.slot({ id: 'workspace.sidebar', page: 'workspace' })
+ctx.ui.component({
+  id: 'feed-panel',
+  slot: 'workspace.sidebar',
+  title: 'Feed',
+  state: store,
+  render: (h) => h('view', { direction: 'column' }, [
+    h('text', { value: `items: ${store.getSnapshot().items.length}` }),
+    h('button', { label: 'Refresh' }),
+  ]),
+})
+```
+
+- **component**：返回统一 vnode，不直接依赖 React/Ink/RN；
+- **state**：`getSnapshot / subscribe / select / actions`，adapter 各自绑定框架；
+- **adapter**：webui adapter 把 vnode 转成 React 组件并注册到 `ctx.slots`；tui adapter 把 vnode 投影成文本 panel；
+- 组件注册、store、layer/slot 都是 fiber effect，HMR 自动回收。
+
+内置 adapter：
+
+```ts
+import { createUiKit, webuiSlotsAdapter, tuiPanelAdapter } from 'dsh-neoforge/ui'
+
+ctx.plugin(createUiKit({
+  adapters: [
+    webuiSlotsAdapter({ createElement: React.createElement }),
+    tuiPanelAdapter(),
+  ],
+}))
+```
+
+GUI/React Native 可以用同一套 `SurfaceAdapter` 约定接自己的 service。
+
 ## WebUI / TUI：事件跨树
+
 
 - **TUI（cc-tui）**：Node 同树场景直接 `ctx.on`，无需额外层；组件注入仍按目标可达性选择 `mixin` 或 `fabric`。
 - **WebUI**：浏览器是另一棵 Cordis 树，使用两个新入口：
 
 ```ts
 // host 侧：把最新事件发布到官方 webserver exact route
-import { createForgeRelay } from 'dsh-forge'
+import { createNeoForgeRelay } from 'dsh-neoforge'
 
-ctx.plugin(createForgeRelay({
-  path: '/forge/snapshot',
+ctx.plugin(createNeoForgeRelay({
+  path: '/neoforge/snapshot',
   points: ['agent-preset/switch'],
 }))
 ```
 
 ```ts
-// browser 侧：dsh-forge/client 轮询 relay 并 re-emit 同名 forge 事件
-import { createForgeClient } from 'dsh-forge/client'
+// browser 侧：dsh-neoforge/client 轮询 relay 并 re-emit 同名 neoforge 事件
+import { createNeoForgeClient } from 'dsh-neoforge/client'
 
-ctx.plugin(createForgeClient({
-  route: '/forge/snapshot',
+ctx.plugin(createNeoForgeClient({
+  route: '/neoforge/snapshot',
   points: ['agent-preset/switch'],
   interval: 1500,
 }))
 ```
 
-`createForgeClient` 是浏览器安全入口，不 import 任何 Node builtin；事件到达浏览器树后，UI 注册仍走官方 `ctx.slots` / `ctx.command`，forge 只负责事件语义跨树。
+`createNeoForgeClient` 是浏览器安全入口，不 import 任何 Node builtin；事件到达浏览器树后，UI 注册仍走官方 `ctx.slots` / `ctx.command`，neoforge 只负责事件语义跨树。
 
 ## 可选：保留加载期桥
 
 运行期不可达目标可显式声明 `source: { kind: 'fabric' }`，并导出静态 stubs 由宿主自行 bootstrap：
 
 ```ts
-import { buildPatchStubs } from 'dsh-forge'
+import { buildPatchStubs } from 'dsh-neoforge'
 import { bootstrapFabric } from 'cordis-fabric'
 
 bootstrapFabric(buildPatchStubs([catalog]))
 ```
 
-这是兼容出口，不是默认路径；`dsh-forge` 本身不依赖 `cordis-fabric`。
+这是兼容出口，不是默认路径；`dsh-neoforge` 本身不依赖 `cordis-fabric`。
 
 ## 开发
 
 ```sh
 pnpm install         # 同时执行 prepare 构建 dist/
 pnpm run typecheck   # tsc strict
-pnpm test            # 50 项：Advice + source + runtime/module mixin + WebUI relay/client + HMR + policy
+pnpm test            # 56 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
 pnpm run build       # dist/ ESM + d.ts
 ```
 

@@ -23,7 +23,7 @@ function capabilityFor(operation: FabricOperation, declared: InjectionPoint['req
   const actual = declared ?? 'observe'
   if (!allowed.has(actual)) {
     throw new Error(
-      `forge: operation "${operation}" does not allow requires ${JSON.stringify(actual)}; allowed: ${[...allowed].join(', ')}`,
+      `neoforge: operation "${operation}" does not allow requires ${JSON.stringify(actual)}; allowed: ${[...allowed].join(', ')}`,
     )
   }
   return actual
@@ -42,16 +42,16 @@ function tierFor(source: PointSource): InjectionPoint['tier'] {
 /** Infer a semantic source from the legacy tier/runtime/mixin/fabric fields. */
 function inferSource(point: InjectionPointInput): PointSource {
   if (point.tier === 1) {
-    if (!point.runtime) throw new Error(`forge: tier-1 point "${point.id}" requires a runtime target`)
+    if (!point.runtime) throw new Error(`neoforge: tier-1 point "${point.id}" requires a runtime target`)
     return { kind: 'view', service: point.runtime.service, method: point.runtime.method }
   }
   if (point.tier === 2) {
-    if (!point.runtime) throw new Error(`forge: tier-2 point "${point.id}" requires a runtime target`)
+    if (!point.runtime) throw new Error(`neoforge: tier-2 point "${point.id}" requires a runtime target`)
     return { kind: 'service', service: point.runtime.service, method: point.runtime.method }
   }
   if (point.tier === 3) {
     const legacy = point.mixin ?? point.fabric
-    if (!legacy) throw new Error(`forge: tier-3 point "${point.id}" requires a first-class mixin`)
+    if (!legacy) throw new Error(`neoforge: tier-3 point "${point.id}" requires a first-class mixin`)
     return {
       kind: point.mixin ? 'mixin' : 'fabric',
       target: legacy.target,
@@ -61,7 +61,7 @@ function inferSource(point: InjectionPointInput): PointSource {
     }
   }
   throw new Error(
-    `forge: point "${point.id}" must declare source, or legacy tier 1/2/3 with runtime/mixin`,
+    `neoforge: point "${point.id}" must declare source, or legacy tier 1/2/3 with runtime/mixin`,
   )
 }
 
@@ -92,11 +92,11 @@ function validateMap(point: InjectionPointInput): void {
   for (const key of ['toEvent', 'applyEvent'] as const) {
     const fn = point.map[key]
     if (fn !== undefined && typeof fn !== 'function') {
-      throw new Error(`forge: point "${point.id}" map.${key} must be a function`)
+      throw new Error(`neoforge: point "${point.id}" map.${key} must be a function`)
     }
   }
   if (point.map.applyEvent && !point.map.toEvent) {
-    throw new Error(`forge: point "${point.id}" map.applyEvent requires map.toEvent`)
+    throw new Error(`neoforge: point "${point.id}" map.applyEvent requires map.toEvent`)
   }
 }
 
@@ -107,16 +107,16 @@ function validateMap(point: InjectionPointInput): void {
  */
 export function defineInjectionPoint(point: InjectionPointInput): Readonly<InjectionPoint> {
   if (!MIXIN_ID_RE.test(point.id)) {
-    throw new Error(`forge: invalid injection point id ${JSON.stringify(point.id)}, expected 'namespace/action'`)
+    throw new Error(`neoforge: invalid injection point id ${JSON.stringify(point.id)}, expected 'namespace/action'`)
   }
   if (point.mixin && point.fabric) {
-    throw new Error(`forge: point "${point.id}" declares both mixin and legacy fabric; use mixin only`)
+    throw new Error(`neoforge: point "${point.id}" declares both mixin and legacy fabric; use mixin only`)
   }
   if (point.source && (point.tier !== undefined || point.runtime || point.mixin || point.fabric)) {
-    // defineCatalog / createForge routinely re-validate already-normalized
+    // defineCatalog / createNeoForge routinely re-validate already-normalized
     // points; accept them when the legacy fields are exactly the derived view.
     if (!isConsistentNormalized(point)) {
-      throw new Error(`forge: point "${point.id}" declares source together with inconsistent legacy target fields; choose one`)
+      throw new Error(`neoforge: point "${point.id}" declares source together with inconsistent legacy target fields; choose one`)
     }
   }
 
@@ -128,20 +128,20 @@ export function defineInjectionPoint(point: InjectionPointInput): Readonly<Injec
   switch (source.kind) {
     case 'event': {
       if (typeof source.event !== 'string' || !source.event) {
-        throw new Error(`forge: point "${point.id}" event source requires a non-empty event name`)
+        throw new Error(`neoforge: point "${point.id}" event source requires a non-empty event name`)
       }
       if (requires !== 'observe') {
-        throw new Error(`forge: point "${point.id}" aliases an official event and cannot declare mutating power`)
+        throw new Error(`neoforge: point "${point.id}" aliases an official event and cannot declare mutating power`)
       }
       if (point.map?.applyEvent) {
-        throw new Error(`forge: point "${point.id}" event aliases cannot write back; remove map.applyEvent`)
+        throw new Error(`neoforge: point "${point.id}" event aliases cannot write back; remove map.applyEvent`)
       }
       break
     }
     case 'view':
     case 'service': {
       if (!source.service || !source.method) {
-        throw new Error(`forge: point "${point.id}" ${source.kind} source requires service and method`)
+        throw new Error(`neoforge: point "${point.id}" ${source.kind} source requires service and method`)
       }
       runtime = { service: source.service, method: source.method }
       break
@@ -154,7 +154,7 @@ export function defineInjectionPoint(point: InjectionPointInput): Readonly<Injec
       // a load-time bridge without a documented, review-listed exemption.
       if (point.runtime && !point.engineExclusive) {
         throw new Error(
-          `forge: "${point.id}" is runtime-reachable but declared ${source.kind}; ` +
+          `neoforge: "${point.id}" is runtime-reachable but declared ${source.kind}; ` +
           `use a service/view source, or set engineExclusive with documented justification`,
         )
       }
@@ -184,17 +184,17 @@ export const defineEventPoint = defineInjectionPoint
 /** Validate and freeze a catalog of injection points for one official plugin. */
 export function defineCatalog(catalog: CatalogInput): Readonly<Catalog> {
   if (!catalog.plugin || !catalog.versionRange) {
-    throw new Error('forge: catalog requires plugin and versionRange')
+    throw new Error('neoforge: catalog requires plugin and versionRange')
   }
   const seenPoints = new Set<string>()
   const seenMixins = new Set<string>()
   const points = catalog.points.map((point) => {
-    if (seenPoints.has(point.id)) throw new Error(`forge: duplicate injection point "${point.id}"`)
+    if (seenPoints.has(point.id)) throw new Error(`neoforge: duplicate injection point "${point.id}"`)
     seenPoints.add(point.id)
     const frozen = defineInjectionPoint(point)
     const mixinId = frozen.mixin?.id
     if (mixinId) {
-      if (seenMixins.has(mixinId)) throw new Error(`forge: duplicate fabric patch id "${mixinId}"`)
+      if (seenMixins.has(mixinId)) throw new Error(`neoforge: duplicate fabric patch id "${mixinId}"`)
       seenMixins.add(mixinId)
     }
     return frozen

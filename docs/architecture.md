@@ -1,4 +1,4 @@
-# dsh-forge 架构：Advice 原语 + 语义 source + 运行期快照/恢复
+# dsh-neoforge 架构：Advice 原语 + 语义 source + 运行期快照/恢复
 
 > 目标：让 DSH 社区插件开发者以最低学习成本、最小破坏性更新冲击开发插件；
 > 拦截逻辑默认运行期完成，官方已有 seam 时优先复用 seam。
@@ -9,13 +9,13 @@
 ┌──────────────────────────────────────────────────────────┐
 │ 消费层：社区插件                                           │
 │   ctx.on('vendor/action', handler)                        │
-│   ctx.forge.on(...) 语法糖（1:1 委托 ctx.on）              │
+│   ctx.neoforge.on(...) 语法糖（1:1 委托 ctx.on）              │
 ├──────────────────────────────────────────────────────────┤
-│ 标准 API 层（dsh-forge，本仓库）                           │
+│ 标准 API 层（dsh-neoforge，本仓库）                           │
 │   defineMixin       —— 一等 Mixin 声明                     │
 │   defineEventPoint  —— 语义 source → 稳定事件契约          │
 │   defineCatalog     —— 每个官方包一份版本化 catalog         │
-│   ForgeService      —— 注册、诊断、host policy             │
+│   NeoForgeService      —— 注册、诊断、host policy             │
 │   buildPatchStubs   —— 可选：仅 kind:'fabric' 编译 stub    │
 ├──────────────────────────────────────────────────────────┤
 │ Advice 层（唯一操作原语）                                   │
@@ -69,8 +69,8 @@ source:
 ### 4.1 解析
 
 1. catalog 注册时；
-2. 官方 `internal/service` 事件（service 类晚于 forge 加载时）；
-3. `ctx.forge.status()` 的 `verify()`（模块晚于 forge import 时）。
+2. 官方 `internal/service` 事件（service 类晚于 neoforge 加载时）；
+3. `ctx.neoforge.status()` 的 `verify()`（模块晚于 neoforge import 时）。
 
 解析规则：
 
@@ -85,7 +85,7 @@ source:
 const desc = Object.getOwnPropertyDescriptor(holder, key)
 ```
 
-wrapper 标记 `Symbol.for('dsh-forge.patched')`，携带 `{ id, owner, original, holder, key }`。
+wrapper 标记 `Symbol.for('dsh-neoforge.patched')`，携带 `{ id, owner, original, holder, key }`。
 
 ### 4.3 修改后运行
 
@@ -102,7 +102,7 @@ Object.defineProperty(holder, key, { ...desc, value: wrapper })
 HMR 分级：
 
 - service 类目标：`internal/service` 同步代际交接，新类 prototype 自动补丁；
-- 模块级函数目标：由 `forge/module/load|reload|unload` 自定义事件层驱动；宿主发布 reload 后同一同步调用内退役旧 holder、patch 新 holder；
+- 模块级函数目标：由 `neoforge/module/load|reload|unload` 自定义事件层驱动；宿主发布 reload 后同一同步调用内退役旧 holder、patch 新 holder；
 - 无发布者的模块级 CJS 目标：`status()/verify()` 重新解析作为兜底；
 - ESM named export / `#private` / 闭包：运行期不可达，只能走 `kind: 'fabric'` 加载期桥。
 
@@ -110,7 +110,7 @@ HMR 分级：
 
 - **不另造事件发射器**：事件总线就是 `ctx.bail/emit/on`，HMR 回收、context 过滤、isolate 语义免费复用。
 - **seam-first**：审核顺序固定为官方事件 → 官方服务 → view → mixin → fabric。
-- **能力显式**：`requires: 'observe' | 'mutate' | 'replace'`；宿主 `ctx.intercept('forge', { allowMutate: false })` 降级为只读。
+- **能力显式**：`requires: 'observe' | 'mutate' | 'replace'`；宿主 `ctx.intercept('neoforge', { allowMutate: false })` 降级为只读。
 - **drift 响亮**：版本漂移报 `missing/stale`；运行期不可达目标报 `unavailable`，不静默。
 
 ## 6. 目录
@@ -121,7 +121,7 @@ src/
   version.ts         satisfies：保守 semver 漂移诊断
   mixin.ts           defineMixin / buildPatchStubs（可选 fabric 出口）
   registry.ts        defineEventPoint / defineCatalog / source normalize
-  service.ts         ForgeService：source → backend、诊断、registerMixin
+  service.ts         NeoForgeService：source → backend、诊断、registerMixin
   dispatch.ts        事件构造 + tier 1/2 的 dispatchCall
   backends/
     event-alias.ts   event source
@@ -130,22 +130,24 @@ src/
     runtime-mixin.ts class/service mixin：resolve + 快照 + wrapper + 独占冲突
     module-mixin.ts  functionName/expressionName mixin：消费模块生命周期事件
     fabric.ts        fabric source：可选加载期桥
-  module-events.ts   forge/module/load|reload|unload 自定义事件层
+  module-events.ts   neoforge/module/load|reload|unload 自定义事件层
   relay.ts           host 侧 webserver 快照路由（WebUI relay）
-  client.ts          dsh-forge/client：浏览器安全轮询/re-emit
+  client.ts          dsh-neoforge/client：浏览器安全轮询/re-emit
+  ui/                dsh-neoforge/ui：page/layer/slot/component + state + adapters
   testkit.ts         contractSuite
 test/
-  forge.test.ts             tier 1/2、HMR、policy、registry、stub 编译
+  neoforge.test.ts             tier 1/2、HMR、policy、registry、stub 编译
   runtime-mixin.test.ts     运行期 mixin、冲突 loud error、语义 source
 research/fabric/           vendored 参考，仅可选加载期桥使用
 ```
 
 ## 7. UI 侧
 
-- TUI（cc-tui）同树直接消费 `ctx.on`；组件注入按目标可达性选择 runtime mixin 或 fabric。
-- WebUI 是独立浏览器树：`dsh-forge/relay` 在宿主经官方 `ctx.webServer` exact route 发布最新事件，`dsh-forge/client` 在浏览器轮询并 re-emit 同名事件。
-- UI 注册面仍归官方 `ctx.slots` / `ctx.command`；forge 不镜像注册 API。
-- `src/client.ts` 保持零 Node builtin，可被浏览器 bundle 直接包含。
+- `dsh-neoforge/ui` 提供渲染无关的 page → layer → slot → component 结构与 state seat；
+- 组件返回统一 vnode，adapter 分别映射 React（WebUI）、Ink/文本（TUI）、React Native（GUI）；
+- webui adapter 通过 `ctx.slots` 注册实际 React 组件，tui adapter 投影文本 panel；
+- 跨树事件由 `relay + client` 负责，状态由 `ctx.ui.state` 承载；
+- 所有注册是 fiber effect，HMR 自动回收。
 
 ## 8. 非目标
 

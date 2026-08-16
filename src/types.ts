@@ -1,11 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 
 /** Cooperative opt-out: an official plugin sets this static field to refuse patching. */
-export const kOptOut = Symbol.for('dsh-forge.optout')
+export const kOptOut = Symbol.for('dsh-neoforge.optout')
 /** Cordis internal: unwrap traceable proxies to the raw service instance. */
 export const kOriginal = Symbol.for('cordis.original')
 /** Marks runtime-mixin wrappers; shared across package copies for chain diagnostics. */
-export const kPatched = Symbol.for('dsh-forge.patched')
+export const kPatched = Symbol.for('dsh-neoforge.patched')
 
 /** Fabric patch behavior kind, identical to cordis-fabric's FabricOperation. */
 export type FabricOperation = 'before' | 'after' | 'around' | 'replace'
@@ -36,7 +36,7 @@ export interface FabricTargetRef {
  * A first-class Mixin declaration: one fabric patch descriptor without its
  * runtime handler. Mixins are versioned, priority-ordered, validated at
  * definition time, compiled into load-time instrumentation stubs by
- * `buildPatchStubs()`, and registered at runtime through `ctx.forge.registerMixin()`.
+ * `buildPatchStubs()`, and registered at runtime through `ctx.neoforge.registerMixin()`.
  */
 export interface Mixin {
   /** Patch id, also the default event namespace for the derived event point. */
@@ -57,10 +57,10 @@ export type MixinRef = Mixin | Omit<Mixin, 'id'>
  * Catalogs can narrow the payload type in their `Events` augmentation:
  *
  *   interface Events {
- *     'agent-preset/switch'(event: ForgeEvent<{ to: string }>): void
+ *     'agent-preset/switch'(event: NeoForgeEvent<{ to: string }>): void
  *   }
  */
-export interface ForgeEvent<TPayload = Record<string, unknown>> {
+export interface NeoForgeEvent<TPayload = Record<string, unknown>> {
   /** Event point id, e.g. 'official-chat/message'. */
   point: string
   /** First-class mixin id when the point is fabric-backed. */
@@ -195,11 +195,11 @@ export interface Catalog {
 }
 
 /**
- * JSON snapshot served by a host-side forge relay and consumed by the
+ * JSON snapshot served by a host-side neoforge relay and consumed by the
  * browser-safe client entry. `events` contains the latest event per point.
  */
-export interface ForgeSnapshot {
-  events: ForgeEvent[]
+export interface NeoForgeSnapshot {
+  events: NeoForgeEvent[]
 }
 
 export type BindStatus = 'bound' | 'pending' | 'missing' | 'opted-out' | 'unavailable' | 'stale' | 'denied'
@@ -220,8 +220,8 @@ export interface BindResult {
 
 /** Event translation hooks supplied by the facade; identical across backends. */
 export interface Hooks {
-  before(eventCtx: Context, event: ForgeEvent): void
-  after(eventCtx: Context, event: ForgeEvent): void
+  before(eventCtx: Context, event: NeoForgeEvent): void
+  after(eventCtx: Context, event: NeoForgeEvent): void
 }
 
 /** An interception engine. Selection is per-point via `InjectionPoint.tier`. */

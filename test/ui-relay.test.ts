@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
-import { createForgeRelay, type ForgeEvent } from '../src/index.ts'
-import { createForgeClient } from '../src/client.ts'
+import { createNeoForgeRelay, type NeoForgeEvent } from '../src/index.ts'
+import { createNeoForgeClient } from '../src/client.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'ui/state'(event: ForgeEvent): void
-    'ui/action'(event: ForgeEvent): void
+    'ui/state'(event: NeoForgeEvent): void
+    'ui/action'(event: NeoForgeEvent): void
   }
 }
 
@@ -27,14 +27,14 @@ test('relay: exact route publishes the latest event per point', async () => {
   const ctx = new Context()
   const routes: any[] = []
   ctx.provide('webServer', { register: (route: any) => { routes.push(route); return () => {} } })
-  await ctx.plugin(createForgeRelay({ path: '/forge/snapshot', points: ['ui/state'] }))
+  await ctx.plugin(createNeoForgeRelay({ path: '/neoforge/snapshot', points: ['ui/state'] }))
 
   ctx.emit('ui/state', { point: 'ui/state', args: [], result: 1 })
   ctx.emit('ui/state', { point: 'ui/state', args: [], result: 2 })
 
   assert.equal(routes.length, 1)
   assert.equal(routes[0].kind, 'exact')
-  assert.equal(routes[0].path, '/forge/snapshot')
+  assert.equal(routes[0].path, '/neoforge/snapshot')
 
   const res = jsonResponse()
   routes[0].handler({}, res)
@@ -46,16 +46,16 @@ test('relay: exact route publishes the latest event per point', async () => {
 test('relay: mounts later when ctx.webServer arrives via internal/service', async () => {
   const ctx = new Context()
   const routes: any[] = []
-  await ctx.plugin(createForgeRelay({ path: '/forge/snapshot', points: ['ui/state'] }))
+  await ctx.plugin(createNeoForgeRelay({ path: '/neoforge/snapshot', points: ['ui/state'] }))
 
   ctx.provide('webServer', { register: (route: any) => { routes.push(route); return () => {} } })
   assert.equal(routes.length, 1)
 })
 
-test('client: polls the relay and re-emits forge events on the browser tree', async () => {
+test('client: polls the relay and re-emits neoforge events on the browser tree', async () => {
   const browser = new Context()
-  const seen: ForgeEvent[] = []
-  browser.on('ui/state', (event: ForgeEvent) => seen.push(event))
+  const seen: NeoForgeEvent[] = []
+  browser.on('ui/state', (event: NeoForgeEvent) => seen.push(event))
 
   const snapshots = [
     { events: [{ point: 'ui/state', args: [], result: 'one' }] },
@@ -63,8 +63,8 @@ test('client: polls the relay and re-emits forge events on the browser tree', as
   ]
   const fetchImpl = (async () => ({ ok: true, json: async () => snapshots.shift() })) as unknown as typeof fetch
 
-  const facade = await browser.plugin(createForgeClient({
-    route: '/forge/snapshot',
+  const facade = await browser.plugin(createNeoForgeClient({
+    route: '/neoforge/snapshot',
     points: ['ui/state'],
     interval: 0,
     fetch: fetchImpl,
@@ -82,8 +82,8 @@ test('client: polls the relay and re-emits forge events on the browser tree', as
 test('client: point filter drops unrelated snapshot events', async () => {
   const browser = new Context()
   const seen: string[] = []
-  browser.on('ui/state', (event: ForgeEvent) => seen.push(String(event.result)))
-  browser.on('ui/action', (event: ForgeEvent) => seen.push(`action:${String(event.result)}`))
+  browser.on('ui/state', (event: NeoForgeEvent) => seen.push(String(event.result)))
+  browser.on('ui/action', (event: NeoForgeEvent) => seen.push(`action:${String(event.result)}`))
 
   const snapshot = {
     events: [
@@ -92,7 +92,7 @@ test('client: point filter drops unrelated snapshot events', async () => {
     ],
   }
   const fetchImpl = (async () => ({ ok: true, json: async () => snapshot })) as unknown as typeof fetch
-  await browser.plugin(createForgeClient({ route: '/forge/snapshot', points: ['ui/state'], interval: 0, fetch: fetchImpl }))
+  await browser.plugin(createNeoForgeClient({ route: '/neoforge/snapshot', points: ['ui/state'], interval: 0, fetch: fetchImpl }))
   await new Promise((resolve) => setTimeout(resolve, 10))
   assert.deepEqual(seen, ['keep'])
 })
@@ -106,7 +106,7 @@ test('host relay → browser client end-to-end over one fake webserver route', a
       return () => {}
     },
   })
-  await host.plugin(createForgeRelay({ path: '/forge/snapshot', points: ['ui/state'] }))
+  await host.plugin(createNeoForgeRelay({ path: '/neoforge/snapshot', points: ['ui/state'] }))
   host.emit('ui/state', { point: 'ui/state', args: [], payload: { ready: true }, result: 'host-result' })
 
   const res = jsonResponse()
@@ -114,11 +114,11 @@ test('host relay → browser client end-to-end over one fake webserver route', a
   const snapshot = JSON.parse(res.body)
 
   const browser = new Context()
-  const seen: ForgeEvent[] = []
-  browser.on('ui/state', (event: ForgeEvent) => seen.push(event))
+  const seen: NeoForgeEvent[] = []
+  browser.on('ui/state', (event: NeoForgeEvent) => seen.push(event))
 
   const fetchImpl = (async () => ({ ok: true, json: async () => snapshot })) as unknown as typeof fetch
-  await browser.plugin(createForgeClient({ route: '/forge/snapshot', interval: 0, fetch: fetchImpl }))
+  await browser.plugin(createNeoForgeClient({ route: '/neoforge/snapshot', interval: 0, fetch: fetchImpl }))
   await new Promise((resolve) => setTimeout(resolve, 10))
 
   assert.equal(seen.length, 1)

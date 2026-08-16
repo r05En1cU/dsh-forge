@@ -1,8 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ForgeEvent, ForgeSnapshot } from './types.ts'
+import type { NeoForgeEvent, NeoForgeSnapshot } from './types.ts'
 
-export interface ForgeClientOptions {
-  /** Host relay route, e.g. '/forge/snapshot'. */
+export interface NeoForgeClientOptions {
+  /** Host relay route, e.g. '/neoforge/snapshot'. */
   route: string
   /** When set, only these point ids are re-emitted. */
   points?: string[]
@@ -16,24 +16,24 @@ export interface ForgeClientOptions {
 }
 
 /**
- * Browser-safe entry (`dsh-forge/client`). Polls a host-side forge relay and
- * re-emits the same ForgeEvent-shaped events on the browser Cordis tree.
+ * Browser-safe entry (`dsh-neoforge/client`). Polls a host-side neoforge relay and
+ * re-emits the same NeoForgeEvent-shaped events on the browser Cordis tree.
  * This file must stay free of Node builtins; it is the WebUI counterpart of
  * the host/TUI event bus.
  */
-export function createForgeClient(options: ForgeClientOptions) {
+export function createNeoForgeClient(options: NeoForgeClientOptions) {
   if (typeof options.route !== 'string' || !options.route.startsWith('/')) {
-    throw new Error(`forge-client: route must start with '/', got ${JSON.stringify(options.route)}`)
+    throw new Error(`neoforge-client: route must start with '/', got ${JSON.stringify(options.route)}`)
   }
   const points = options.points
   if (points !== undefined && (!Array.isArray(points) || points.some((point) => typeof point !== 'string'))) {
-    throw new Error('forge-client: points must be an array of point ids')
+    throw new Error('neoforge-client: points must be an array of point ids')
   }
   const interval = options.interval ?? 1000
   const immediate = options.immediate ?? true
 
   return {
-    name: `forge-client:${options.route}`,
+    name: `neoforge-client:${options.route}`,
     apply(ctx: Context) {
       const fetchImpl = options.fetch ?? globalThis.fetch
       const allowed = points ? new Set(points) : undefined
@@ -43,11 +43,11 @@ export function createForgeClient(options: ForgeClientOptions) {
         try {
           const response = await fetchImpl(options.route, { cache: 'no-store' })
           if (!response.ok) return
-          const snapshot = await response.json() as ForgeSnapshot
+          const snapshot = await response.json() as NeoForgeSnapshot
           if (!Array.isArray(snapshot.events)) return
           for (const event of snapshot.events) {
             if (allowed && !allowed.has(event.point)) continue
-            ctx.emit(event.point as any, event satisfies ForgeEvent)
+            ctx.emit(event.point as any, event satisfies NeoForgeEvent)
           }
         } catch (error) {
           options.onError?.(error)
@@ -58,7 +58,7 @@ export function createForgeClient(options: ForgeClientOptions) {
       const timer = interval > 0 ? setInterval(() => void poll(), interval) : undefined
       ctx.effect(() => () => {
         if (timer !== undefined) clearInterval(timer)
-      }, `forge-client:cleanup(${options.route})`)
+      }, `neoforge-client:cleanup(${options.route})`)
     },
   }
 }
@@ -71,8 +71,8 @@ export type {
   CatalogInput,
   FabricOperation,
   FabricTargetRef,
-  ForgeEvent,
-  ForgeSnapshot,
+  NeoForgeEvent,
+  NeoForgeSnapshot,
   InjectionPoint,
   InjectionPointInput,
   Mixin,

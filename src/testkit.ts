@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import type { Catalog, InjectionPoint } from './types.ts'
-import { createForge, getForgeStatus } from './forge.ts'
+import { createNeoForge, getNeoForgeStatus } from './neoforge.ts'
 
 /**
  * Harness a catalog author implements once per official plugin. This is the
@@ -25,8 +25,8 @@ export function contractSuite(catalog: Catalog, harness: ContractHarness) {
   test(`${catalog.plugin}: catalog contract`, async () => {
     const ctx = new Context()
     await harness.install(ctx)
-    await ctx.plugin(createForge(catalog))
-    const status = getForgeStatus(ctx)
+    await ctx.plugin(createNeoForge(catalog))
+    const status = getNeoForgeStatus(ctx)
     for (const point of catalog.points) {
       if (point.tier === 3) continue
       let fired = 0

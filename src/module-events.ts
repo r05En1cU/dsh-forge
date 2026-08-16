@@ -10,11 +10,11 @@ import type { Context } from '@deepseek-ai/cordis'
  */
 export const MODULE_EVENTS = {
   /** First time a module handle becomes available. */
-  load: 'forge/module/load',
+  load: 'neoforge/module/load',
   /** Re-evaluation produced a fresh exports holder. */
-  reload: 'forge/module/reload',
+  reload: 'neoforge/module/reload',
   /** The module handle is going away; snapshots are restored. */
-  unload: 'forge/module/unload',
+  unload: 'neoforge/module/unload',
 } as const
 
 export interface ModuleRecord {

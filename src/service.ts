@@ -1,5 +1,5 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { Backend, BindResult, Catalog, CatalogInput, ForgeEvent, Hooks, InjectionPoint, InjectionPointInput, Mixin, PointSource } from './types.ts'
+import type { Backend, BindResult, Catalog, CatalogInput, NeoForgeEvent, Hooks, InjectionPoint, InjectionPointInput, Mixin, PointSource } from './types.ts'
 import { defineCatalog, defineInjectionPoint } from './registry.ts'
 import { defineMixin } from './mixin.ts'
 import { createGetViewBackend } from './backends/getview.ts'
@@ -9,8 +9,8 @@ import { createModuleMixinBackend } from './backends/module-mixin.ts'
 import { createEventAliasBackend } from './backends/event-alias.ts'
 import { createFabricBackend, type FabricBackendOptions } from './backends/fabric.ts'
 
-/** Host policy, settable per subtree via `ctx.intercept('forge', …)`. */
-export interface ForgePolicy {
+/** Host policy, settable per subtree via `ctx.intercept('neoforge', …)`. */
+export interface NeoForgePolicy {
   /** When false, mutating points degrade to observe-only (nothing flows back). */
   allowMutate?: boolean
   /** Injection point ids the host refuses to bind at all. */
@@ -38,7 +38,7 @@ export interface PointRecord extends BindResult {
 
 // Dynamic injection-point ids live outside Cordis's statically-known Events
 // keys; catalogs re-add them via `declare module` augmentation for consumers.
-type DynamicDispatch = (name: string, event: ForgeEvent) => void
+type DynamicDispatch = (name: string, event: NeoForgeEvent) => void
 
 function isMixin(value: unknown): value is Mixin {
   return !!value && typeof value === 'object'
@@ -92,29 +92,29 @@ function backendForSource(source: PointSource, options: RegisterOptions): Backen
 }
 
 /**
- * The forge standard API layer as a normal Cordis service.
+ * The neoforge standard API layer as a normal Cordis service.
  *
  * Two pillars, one registration path:
  *
- * 1. First-class mixins — `ctx.forge.registerMixin(mixin, handler)` patches the
+ * 1. First-class mixins — `ctx.neoforge.registerMixin(mixin, handler)` patches the
  *    resolved runtime target in place: exact descriptor snapshot, wrapper
  *    execution, and snapshot restore on unload. No load-time hooks.
  * 2. Event bus — catalog points translate intercepted calls into ordinary
  *    Cordis events. Consumers write plain `ctx.on('vendor/action', …)` (or
- *    the `ctx.forge.on(...)` sugar below), so listener registration/recycling
+ *    the `ctx.neoforge.on(...)` sugar below), so listener registration/recycling
  *    is the official Cordis event registration path and is HMR-safe by
  *    construction — no custom emitter, no global listener table.
  *
  * The service itself is mounted once at the root and governed per subtree
- * with `ctx.intercept('forge', policy)`.
+ * with `ctx.intercept('neoforge', policy)`.
  */
-export class ForgeService extends Service<ForgePolicy> {
-  static provide = 'forge'
+export class NeoForgeService extends Service<NeoForgePolicy> {
+  static provide = 'neoforge'
 
   private readonly records = new Map<string, PointRecord>()
 
   constructor(ctx: Context) {
-    super(ctx, 'forge')
+    super(ctx, 'neoforge')
   }
 
   /**
@@ -148,18 +148,18 @@ export class ForgeService extends Service<ForgePolicy> {
   registerMixin(input: Mixin, handler: (call: any, invoke?: () => unknown) => unknown, options?: RuntimeMixinOptions): string {
     const mixin = defineMixin(input)
     if (typeof handler !== 'function') {
-      throw new Error(`forge: mixin "${mixin.id}" requires a trusted handler function`)
+      throw new Error(`neoforge: mixin "${mixin.id}" requires a trusted handler function`)
     }
     const result = installRuntimeMixin(this.ctx, mixin, handler, options)
     if (result.status === 'unavailable') {
-      throw new Error(`forge: cannot register mixin "${mixin.id}" — ${result.reason}`)
+      throw new Error(`neoforge: cannot register mixin "${mixin.id}" — ${result.reason}`)
     }
     if (result.status === 'missing') {
-      throw new Error(`forge: cannot register mixin "${mixin.id}" — ${result.reason}`)
+      throw new Error(`neoforge: cannot register mixin "${mixin.id}" — ${result.reason}`)
     }
-    this.ctx.effect(() => result.dispose ?? (() => {}), `forge:mixin(${mixin.id})`)
+    this.ctx.effect(() => result.dispose ?? (() => {}), `neoforge:mixin(${mixin.id})`)
     if (result.status === 'pending') {
-      this.ctx.logger('forge').warn(`mixin "${mixin.id}" is pending: ${result.reason}`)
+      this.ctx.logger('neoforge').warn(`mixin "${mixin.id}" is pending: ${result.reason}`)
     }
     return mixin.id
   }
@@ -168,8 +168,8 @@ export class ForgeService extends Service<ForgePolicy> {
   register(input: CatalogInput | InjectionPointInput[] | Mixin[], options: RegisterOptions = {}) {
     const catalog = normalizeInput(input)
     // Resolved against the CALLER's context (traceable shadow), so host policy
-    // set via ctx.intercept('forge', …) on any ancestor applies per-subtree.
-    const policy = this[Service.resolveConfig]() as ForgePolicy
+    // set via ctx.intercept('neoforge', …) on any ancestor applies per-subtree.
+    const policy = this[Service.resolveConfig]() as NeoForgePolicy
     const ctx = this.ctx
 
     const hooks: Hooks = {
@@ -203,7 +203,7 @@ export class ForgeService extends Service<ForgePolicy> {
           ...result,
         }
         if (record.status !== 'bound' && record.status !== 'pending') {
-          ctx.logger('forge').warn(
+          ctx.logger('neoforge').warn(
             `injection point "${point.id}" ${record.status}${record.reason ? `: ${record.reason}` : ''}`,
           )
         }
@@ -219,7 +219,7 @@ export class ForgeService extends Service<ForgePolicy> {
         for (const dispose of disposers.reverse()) dispose()
         for (const key of keys) this.records.delete(key)
       }
-    }, `forge:register(${catalog.plugin})`)
+    }, `neoforge:register(${catalog.plugin})`)
 
     return catalog
   }

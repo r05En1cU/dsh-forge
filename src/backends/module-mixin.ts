@@ -24,7 +24,7 @@ function matchesRecord(target: FabricTargetRef, record: ModuleRecord): boolean {
 
 /**
  * Dedicated backend for module-level function mixins. It consumes the custom
- * `forge/module/load|reload|unload` event layer (see `module-events.ts`), so a
+ * `neoforge/module/load|reload|unload` event layer (see `module-events.ts`), so a
  * host/loader that knows about module re-evaluation can repatch fresh exports
  * synchronously — without any load-time hook.
  *

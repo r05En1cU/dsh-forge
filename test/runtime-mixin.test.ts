@@ -3,28 +3,28 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
-  createForge,
+  createNeoForge,
   defineInjectionPoint,
   defineMixin,
-  getForgeStatus,
+  getNeoForgeStatus,
   reloadModule,
   trackModule,
   untrackModule,
-  type ForgeEvent,
+  type NeoForgeEvent,
 } from '../src/index.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'runtime/helper/before'(event: ForgeEvent): void
-    'runtime/compute'(event: ForgeEvent): void
-    'runtime/greet'(event: ForgeEvent): void
-    'runtime/greet/before'(event: ForgeEvent): void
-    'runtime/chat/_send'(event: ForgeEvent): void
-    'runtime/chat/_send/before'(event: ForgeEvent): void
-    'runtime/late/helper/before'(event: ForgeEvent): void
-    'runtime/ready'(event: ForgeEvent): void
-    'runtime/source/helper/before'(event: ForgeEvent): void
-    'runtime/module/helper/before'(event: ForgeEvent): void
+    'runtime/helper/before'(event: NeoForgeEvent): void
+    'runtime/compute'(event: NeoForgeEvent): void
+    'runtime/greet'(event: NeoForgeEvent): void
+    'runtime/greet/before'(event: NeoForgeEvent): void
+    'runtime/chat/_send'(event: NeoForgeEvent): void
+    'runtime/chat/_send/before'(event: NeoForgeEvent): void
+    'runtime/late/helper/before'(event: NeoForgeEvent): void
+    'runtime/ready'(event: NeoForgeEvent): void
+    'runtime/source/helper/before'(event: NeoForgeEvent): void
+    'runtime/module/helper/before'(event: NeoForgeEvent): void
     'official/ready'(value: number): void
   }
 }
@@ -50,7 +50,7 @@ test('runtime mixin: exact descriptor snapshot → wrapper → restore on unload
   const original = runtime.helper
   const originalDesc = Object.getOwnPropertyDescriptor(runtime, 'helper')!
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/helper',
     tier: 3,
     requires: 'mutate',
@@ -58,9 +58,9 @@ test('runtime mixin: exact descriptor snapshot → wrapper → restore on unload
   })]))
   t.after(() => facade.dispose())
   assert.notEqual(runtime.helper, original)
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   // functionName mixins are routed through the dedicated module event layer
-  assert.equal(getForgeStatus(ctx)[0].backend, 'module-mixin')
+  assert.equal(getNeoForgeStatus(ctx)[0].backend, 'module-mixin')
 
   const seen: unknown[] = []
   ctx.on('runtime/helper/before', (e) => {
@@ -79,7 +79,7 @@ test('runtime mixin: exact descriptor snapshot → wrapper → restore on unload
 test('runtime mixin: after operation observes and replaces the settled result', async () => {
   const original = runtime.compute
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/compute',
     tier: 3,
     requires: 'mutate',
@@ -100,7 +100,7 @@ test('runtime mixin: after operation observes and replaces the settled result', 
 
 test('runtime mixin: around fires before + settled after and honors veto', async () => {
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/greet',
     tier: 3,
     requires: 'mutate',
@@ -129,7 +129,7 @@ test('runtime mixin: around fires before + settled after and honors veto', async
 
 test('runtime mixin: replace owns the call and invoke delegates to the snapshot original', async () => {
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/greet',
     tier: 3,
     requires: 'replace',
@@ -156,7 +156,7 @@ test('runtime mixin: className/methodName patches the prototype in place', async
   const original = ChatService.prototype._send
   const originalDesc = Object.getOwnPropertyDescriptor(ChatService.prototype, '_send')!
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/chat/_send',
     tier: 3,
     requires: 'mutate',
@@ -181,7 +181,7 @@ test('runtime mixin: className/methodName patches the prototype in place', async
 test('runtime mixin: a second third-party patch on the same target fails loud', async (t) => {
   const ctx = new Context()
   const original = runtime.helper
-  const f1 = await ctx.plugin(createForge([defineInjectionPoint({
+  const f1 = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/helper', tier: 3, requires: 'mutate', mixin: helperMixin(),
   })]))
   t.after(() => f1.dispose())
@@ -189,7 +189,7 @@ test('runtime mixin: a second third-party patch on the same target fails loud', 
   ctx.on('runtime/helper/before', () => fired++)
 
   await assert.rejects(async () => {
-    await ctx.plugin(createForge([defineInjectionPoint({
+    await ctx.plugin(createNeoForge([defineInjectionPoint({
       id: 'runtime/late/helper', tier: 3, requires: 'mutate',
       mixin: {
         target: {
@@ -212,7 +212,7 @@ test('runtime mixin: a second third-party patch on the same target fails loud', 
 test('runtime mixin: pending custom resolver is patched lazily by verify()', async () => {
   let target: { helper(text: string): string } | undefined
   const ctx = new Context()
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/late/helper',
     tier: 3,
     requires: 'mutate',
@@ -224,11 +224,11 @@ test('runtime mixin: pending custom resolver is patched lazily by verify()', asy
       operation: 'before',
     },
   })], { mixin: { resolveModule: () => target } }))
-  assert.equal(getForgeStatus(ctx)[0].status, 'pending')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'pending')
 
   const original = (text: string) => `virtual:${text}`
   target = { helper: original }
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   assert.notEqual(target.helper, original)
 
   ctx.on('runtime/late/helper/before', (e) => { e.args[0] = 'patched' })
@@ -241,7 +241,7 @@ test('runtime mixin: ESM class exports are patchable through their mutable proto
   const original = esm.ChatService.prototype._send
   const originalDesc = Object.getOwnPropertyDescriptor(esm.ChatService.prototype, '_send')!
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/chat/_send',
     tier: 3,
     requires: 'mutate',
@@ -253,7 +253,7 @@ test('runtime mixin: ESM class exports are patchable through their mutable proto
       operation: 'before',
     },
   })]))
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   const chat = new esm.ChatService('[esm]')
   ctx.on('runtime/chat/_send/before', (e) => { e.args[0] = (e.args[0] as string).toUpperCase() })
   assert.equal(chat.send('hi'), '[esm] HI')
@@ -265,7 +265,7 @@ test('runtime mixin: ESM class exports are patchable through their mutable proto
 
 test('runtime mixin: ESM namespace exports are loud unavailable, not silent fiction', async () => {
   const ctx = new Context()
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/helper',
     tier: 3,
     mixin: {
@@ -276,7 +276,7 @@ test('runtime mixin: ESM namespace exports are loud unavailable, not silent fict
       operation: 'before',
     },
   })]))
-  const record = getForgeStatus(ctx)[0]
+  const record = getNeoForgeStatus(ctx)[0]
   assert.equal(record.status, 'unavailable')
   assert.match(record.reason ?? '', /read-only namespace/)
 })
@@ -288,7 +288,7 @@ test('runtime mixin: class targets resolve through internal/service when the mod
     _send(text: string) { return `[late] ${text}` }
   }
   const ctx = new Context()
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/chat/_send',
     tier: 3,
     requires: 'mutate',
@@ -300,27 +300,27 @@ test('runtime mixin: class targets resolve through internal/service when the mod
       operation: 'before',
     },
   })]))
-  assert.equal(getForgeStatus(ctx)[0].status, 'pending')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'pending')
 
   const original = ChatService.prototype._send
   await ctx.plugin({ name: 'late-chat', apply(c: any) { new ChatService(c) } })
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   assert.notEqual(ChatService.prototype._send, original)
 
   ctx.on('runtime/chat/_send/before', (e) => { e.args[0] = (e.args[0] as string).toUpperCase() })
   assert.equal(ctx.get('chat-runtime').send('hi'), '[late] HI')
 })
 
-test('ctx.forge.registerMixin: raw handler runs against the snapshot and restores on fiber unload', async (t) => {
+test('ctx.neoforge.registerMixin: raw handler runs against the snapshot and restores on fiber unload', async (t) => {
   const original = runtime.helper
   const originalDesc = Object.getOwnPropertyDescriptor(runtime, 'helper')!
   const ctx = new Context()
-  await ctx.plugin(createForge([]))
+  await ctx.plugin(createNeoForge([]))
   const fiber = await ctx.plugin({
     name: 'raw-mixin-user',
-    inject: ['forge'],
+    inject: ['neoforge'],
     apply(c: any) {
-      c.forge.registerMixin(helperMixin(), (call: any) => {
+      c.neoforge.registerMixin(helperMixin(), (call: any) => {
         call.arguments[0] = String(call.arguments[0]).toUpperCase()
       })
     },
@@ -337,14 +337,14 @@ test('ctx.forge.registerMixin: raw handler runs against the snapshot and restore
 test('runtime mixin: unload restores exclusivity — the same id can register again', async (t) => {
   const ctx = new Context()
   const original = runtime.helper
-  const first = await ctx.plugin(createForge([defineInjectionPoint({
+  const first = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/helper', tier: 3, requires: 'mutate', mixin: helperMixin(),
   })]))
   t.after(() => first.dispose())
   await first.dispose()
   assert.equal(runtime.helper, original)
 
-  const second = await ctx.plugin(createForge([defineInjectionPoint({
+  const second = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/helper', tier: 3, requires: 'mutate', mixin: helperMixin(),
   })]))
   t.after(() => second.dispose())
@@ -357,7 +357,7 @@ test('runtime mixin: unload restores exclusivity — the same id can register ag
 
 test('source: event aliases an official event without patching anything', async () => {
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/ready',
     source: { kind: 'event', event: 'official/ready' },
   })]))
@@ -373,7 +373,7 @@ test('source: event aliases an official event without patching anything', async 
 test('source: mixin is the canonical runtime mixin declaration', async (t) => {
   const original = runtime.helper
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/source/helper',
     requires: 'mutate',
     source: {
@@ -394,7 +394,7 @@ test('source: mixin is the canonical runtime mixin declaration', async (t) => {
 
 test('source: fabric is loud unavailable unless the host wired ctx.fabric', async () => {
   const ctx = new Context()
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/fabric-only',
     source: {
       kind: 'fabric',
@@ -405,7 +405,7 @@ test('source: fabric is loud unavailable unless the host wired ctx.fabric', asyn
       operation: 'before',
     },
   })]))
-  const record = getForgeStatus(ctx)[0]
+  const record = getNeoForgeStatus(ctx)[0]
   assert.equal(record.backend, 'fabric')
   assert.equal(record.status, 'unavailable')
   assert.equal(record.kind, 'fabric')
@@ -430,7 +430,7 @@ test('runtime mixin: service class HMR generation is re-bound through internal/s
   const V1 = makeChat('[v1]')
   const V2 = makeChat('[v2]')
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/chat/_send',
     tier: 3,
     requires: 'mutate',
@@ -471,7 +471,7 @@ test('runtime mixin: verify() adopts a re-evaluated module holder and restores t
   const original2 = (text: string) => `second:${text}`
   let current = { helper: original1 }
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/late/helper',
     tier: 3,
     requires: 'mutate',
@@ -489,7 +489,7 @@ test('runtime mixin: verify() adopts a re-evaluated module holder and restores t
   // simulated module re-evaluation: new exports holder
   const stale = current
   current = { helper: original2 }
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   assert.equal(stale.helper, original1)
   assert.notEqual(current.helper, original2)
 
@@ -508,7 +508,7 @@ test('module event layer: track → patch, reload → handover, untrack → rest
   let current: { helper(text: string): string } | undefined
 
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/module/helper',
     requires: 'mutate',
     source: {
@@ -521,10 +521,10 @@ test('module event layer: track → patch, reload → handover, untrack → rest
     },
   })], { mixin: { resolveModule: () => current } }))
   t.after(() => facade.dispose())
-  assert.equal(getForgeStatus(ctx)[0].status, 'pending')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'pending')
 
   trackModule(ctx, { id: 'virtual-module/lib/index.js', module: 'virtual-module', filePath: 'lib/index.js', exports: exports1 })
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
   ctx.on('runtime/module/helper/before', (e) => { e.args[0] = 'patched' })
   assert.equal(exports1.helper('x'), 'first:patched')
 
@@ -536,13 +536,13 @@ test('module event layer: track → patch, reload → handover, untrack → rest
 
   untrackModule(ctx, 'virtual-module/lib/index.js')
   assert.equal(exports2.helper, second)     // current snapshot restored
-  assert.equal(getForgeStatus(ctx)[0].status, 'pending')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'pending')
 })
 
 test('module event layer: version mismatch is loud stale and unrelated modules are ignored', async (t) => {
   const exports = { helper: (text: string) => `ok:${text}` }
   const ctx = new Context()
-  const facade = await ctx.plugin(createForge([defineInjectionPoint({
+  const facade = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'runtime/module/helper',
     requires: 'mutate',
     source: {
@@ -557,12 +557,12 @@ test('module event layer: version mismatch is loud stale and unrelated modules a
   t.after(() => facade.dispose())
 
   trackModule(ctx, { id: 'other-module/lib/index.js', module: 'other-module', filePath: 'lib/index.js', exports })
-  assert.equal(getForgeStatus(ctx)[0].status, 'pending')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'pending')
 
   trackModule(ctx, {
     id: 'virtual-module/lib/index.js', module: 'virtual-module', filePath: 'lib/index.js',
     exports, version: '2.0.0',
   })
-  assert.equal(getForgeStatus(ctx)[0].status, 'stale')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'stale')
   assert.equal(exports.helper, exports.helper) // untouched
 })

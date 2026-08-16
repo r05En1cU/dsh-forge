@@ -1,5 +1,5 @@
 import type { Backend } from '../types.ts'
-import { createForgeEvent } from '../dispatch.ts'
+import { createNeoForgeEvent } from '../dispatch.ts'
 
 /**
  * Seam-first backend: the point aliases an official Cordis event, so nothing
@@ -14,7 +14,7 @@ export function createEventAliasBackend(): Backend {
       const source = point.source
       if (source.kind !== 'event') return { status: 'unavailable', reason: 'not an event source' }
       const dispose = ctx.on(source.event as any, (...args: unknown[]) => {
-        const event = createForgeEvent(point, { args })
+        const event = createNeoForgeEvent(point, { args })
         hooks.after(ctx, event)
       })
       return { status: 'bound', dispose }

@@ -22,7 +22,7 @@ in this repository's history.
   git log --format='%h | %an <%ae> | %s' 68e8d34704fac4a20f94c9d405ae17b089935893
   ```
 
-Local dsh-forge overlays on top of the upstream files:
+Local dsh-neoforge overlays on top of the upstream files:
 
 - `FABRIC_UPSTREAM.md` (this file)
-- `pnpm-lock.yaml` (dsh-forge dependency-resolution adjustments)
+- `pnpm-lock.yaml` (dsh-neoforge dependency-resolution adjustments)

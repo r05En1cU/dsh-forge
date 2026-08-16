@@ -1,5 +1,5 @@
 {
-  "name": "dsh-forge",
+  "name": "dsh-neoforge",
   "version": "0.2.0",
   "description": "NeoForge-style standard API layer for DeepSeek Harness plugins: runtime mixins with snapshot/restore + a Cordis-native event bus",
   "type": "module",
@@ -15,6 +15,10 @@
     "./relay": {
       "types": "./dist/relay.d.ts",
       "default": "./dist/relay.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "default": "./dist/ui/index.js"
     }
   },
   "files": [

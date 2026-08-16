@@ -2,41 +2,41 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CatalogInput, InjectionPointInput, Mixin } from './types.ts'
 import { defineCatalog, defineEventPoint, defineInjectionPoint } from './registry.ts'
 
-import { ForgeService, type PointRecord, type RegisterOptions } from './service.ts'
+import { NeoForgeService, type PointRecord, type RegisterOptions } from './service.ts'
 
-/** Mount-aware access to the forge layer: reuse or install at the root. */
-export function getForge(ctx: Context): ForgeService {
-  const existing = ctx.get('forge', false)
+/** Mount-aware access to the neoforge layer: reuse or install at the root. */
+export function getNeoForge(ctx: Context): NeoForgeService {
+  const existing = ctx.get('neoforge', false)
   if (existing) return existing
-  new ForgeService(ctx.root)
+  new NeoForgeService(ctx.root)
   // re-read so callers get the traceable view bound to their own context —
-  // policy resolution (ctx.intercept('forge', …)) depends on it
-  return ctx.get('forge', false)!
+  // policy resolution (ctx.intercept('neoforge', …)) depends on it
+  return ctx.get('neoforge', false)!
 }
 
 /** Diagnostics snapshot: every injection point registered under this root. */
-export function getForgeStatus(ctx: Context): Omit<PointRecord, 'dispose' | 'verify'>[] {
-  return ctx.get('forge', false)?.status() ?? []
+export function getNeoForgeStatus(ctx: Context): Omit<PointRecord, 'dispose' | 'verify'>[] {
+  return ctx.get('neoforge', false)?.status() ?? []
 }
 
 /**
  * Create the catalog-carrier plugin. Thin by design: all behavior lives in
- * the standard `ForgeService` (`ctx.forge`); this plugin only registers a
+ * the standard `NeoForgeService` (`ctx.neoforge`); this plugin only registers a
  * catalog into it, fiber-scoped.
  *
  * Downstream developers consume standard Cordis events and never see the
  * interception layer:
  *
  *   ctx.on('official-chat/message', (e) => { console.log(e.result) })
- *   ctx.forge.on('official-chat/message', (e) => { console.log(e.result) })
+ *   ctx.neoforge.on('official-chat/message', (e) => { console.log(e.result) })
  *   ctx.on('official-chat/message/before', (e) => { e.args[0] = ... })
  */
-export function createForge(input: CatalogInput | InjectionPointInput[] | Mixin[], options: RegisterOptions = {}) {
+export function createNeoForge(input: CatalogInput | InjectionPointInput[] | Mixin[], options: RegisterOptions = {}) {
   const plugin = Array.isArray(input) ? 'adhoc' : input.plugin
   return {
-    name: `forge:${plugin}`,
+    name: `neoforge:${plugin}`,
     apply(ctx: Context) {
-      getForge(ctx).register(input, options)
+      getNeoForge(ctx).register(input, options)
     },
   }
 }

@@ -4,14 +4,14 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import {
   buildPatchStubs,
   contractSuite,
-  createForge,
+  createNeoForge,
   defineCatalog,
   defineEventPoint,
   defineInjectionPoint,
   defineMixin,
-  getForgeStatus,
+  getNeoForgeStatus,
   kOptOut,
-  type ForgeEvent,
+  type NeoForgeEvent,
 } from '../src/index.ts'
 
 // Typed event surface: catalogs ship this augmentation so downstream
@@ -19,14 +19,14 @@ import {
 // official API — no mixin concepts anywhere in the consumer experience.
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    'official-chat/message'(event: ForgeEvent): void
-    'official-chat/message/before'(event: ForgeEvent): void
-    'official-chat/fetch'(event: ForgeEvent): void
-    'official-chat/helper/before'(event: ForgeEvent): void
-    'official-chat/compute'(event: ForgeEvent): void
-    'official-chat/compute/before'(event: ForgeEvent): void
-    'official-chat/greet/before'(event: ForgeEvent): void
-    'vendor-b/trace'(event: ForgeEvent): void
+    'official-chat/message'(event: NeoForgeEvent): void
+    'official-chat/message/before'(event: NeoForgeEvent): void
+    'official-chat/fetch'(event: NeoForgeEvent): void
+    'official-chat/helper/before'(event: NeoForgeEvent): void
+    'official-chat/compute'(event: NeoForgeEvent): void
+    'official-chat/compute/before'(event: NeoForgeEvent): void
+    'official-chat/greet/before'(event: NeoForgeEvent): void
+    'vendor-b/trace'(event: NeoForgeEvent): void
   }
 }
 
@@ -107,20 +107,20 @@ test('defineInjectionPoint normalizes legacy fabric into a first-class mixin', (
   assert.equal(buildPatchStubs([[point]]).length, 1)
 })
 
-test('ctx.forge.on/once/emit/bail are 1:1 delegates of the official Cordis event path', async () => {
+test('ctx.neoforge.on/once/emit/bail are 1:1 delegates of the official Cordis event path', async () => {
   const ctx = new Context()
-  await ctx.plugin(createForge([]))
+  await ctx.plugin(createNeoForge([]))
   const seen: string[] = []
   await ctx.plugin({
     name: 'consumer',
-    inject: ['forge'],
+    inject: ['neoforge'],
     apply(c: any) {
-      c.forge.on('vendor-b/trace', () => seen.push('on'))
-      c.forge.once('vendor-b/trace', () => seen.push('once'))
-      c.forge.emit('vendor-b/trace', {})
-      c.forge.emit('vendor-b/trace', {})
-      c.forge.on('official-chat/message/before', () => seen.push('bail'))
-      c.forge.bail('official-chat/message/before', {})
+      c.neoforge.on('vendor-b/trace', () => seen.push('on'))
+      c.neoforge.once('vendor-b/trace', () => seen.push('once'))
+      c.neoforge.emit('vendor-b/trace', {})
+      c.neoforge.emit('vendor-b/trace', {})
+      c.neoforge.on('official-chat/message/before', () => seen.push('bail'))
+      c.neoforge.bail('official-chat/message/before', {})
     },
   })
   assert.deepEqual(seen, ['on', 'once', 'on', 'bail'])
@@ -128,10 +128,10 @@ test('ctx.forge.on/once/emit/bail are 1:1 delegates of the official Cordis event
 
 // ---------- tier 2: runtime prototype backend ----------
 
-test('order-independent: forge loads before the official plugin', async () => {
+test('order-independent: neoforge loads before the official plugin', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   const seen: unknown[] = []
   ctx.on('official-chat/message/before', (e) => { seen.push(e.args[0]); e.args[0] = (e.args[0] as string).toUpperCase() })
   ctx.on('official-chat/message', (e) => seen.push(e.result))
@@ -145,19 +145,19 @@ test('order-independent: official plugin loads first (catch-up)', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   const seen: unknown[] = []
   ctx.on('official-chat/message', (e) => seen.push(e.result))
   ctx.get('chat').send('world')
   assert.deepEqual(seen, ['[official] world'])
-  assert.equal(getForgeStatus(ctx)[0].status, 'bound')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'bound')
 })
 
 test('async methods: after-event carries the settled result', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'official-chat/fetch',
     tier: 2,
     runtime: { service: 'chat', method: '_fetch' },
@@ -174,7 +174,7 @@ test('unload restores the descriptor and stops events', async () => {
   const ctx = new Context()
   await ctx.plugin(plugin)
   const original = ChatService.prototype._processMessage
-  const fiber = await ctx.plugin(createForge([messagePoint()]))
+  const fiber = await ctx.plugin(createNeoForge([messagePoint()]))
   let fired = 0
   ctx.on('official-chat/message', () => fired++)
   ctx.get('chat').send('x')
@@ -186,13 +186,13 @@ test('unload restores the descriptor and stops events', async () => {
   assert.equal(ctx.get('chat').send('z'), '[official] z')
 })
 
-test('two forge instances chain; lower unload keeps upper working', async () => {
+test('two neoforge instances chain; lower unload keeps upper working', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
   const log: string[] = []
-  const f1 = await ctx.plugin(createForge([messagePoint()]))
-  const f2 = await ctx.plugin(createForge([defineInjectionPoint({
+  const f1 = await ctx.plugin(createNeoForge([messagePoint()]))
+  const f2 = await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'vendor-b/trace',
     tier: 2,
     runtime: { service: 'chat', method: '_processMessage' },
@@ -215,7 +215,7 @@ test('official fiber restart does not double-patch', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   const fiber = await ctx.plugin(plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   let fired = 0
   ctx.on('official-chat/message', () => fired++)
   await fiber.restart()
@@ -227,25 +227,25 @@ test('cooperative opt-out is honored', async () => {
   const { plugin } = makeOfficialChat({ optOut: true })
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   let fired = 0
   ctx.on('official-chat/message', () => fired++)
   assert.equal(ctx.get('chat').send('x'), '[official] x')
   assert.equal(fired, 0)
-  assert.equal(getForgeStatus(ctx)[0].status, 'opted-out')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'opted-out')
 })
 
 test('version drift degrades gracefully (missing method)', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'official-chat/message',
     tier: 2,
     runtime: { service: 'chat', method: '_processMessageV2' },
   })]))
   assert.equal(ctx.get('chat').send('x'), '[official] x')
-  assert.equal(getForgeStatus(ctx)[0].status, 'missing')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'missing')
 })
 
 // ---------- tier 1: consumer view backend ----------
@@ -254,7 +254,7 @@ test('tier 1: consumer plugin with inject sees wrapped calls', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'official-chat/message',
     tier: 1,
     runtime: { service: 'chat', method: '_processMessage' },
@@ -278,7 +278,7 @@ test('consumer listeners ride the official ctx.on lifecycle (HMR dispose)', asyn
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   let fired = 0
   const consumer = await ctx.plugin({
     name: 'consumer',
@@ -332,7 +332,7 @@ test('HMR handover: new module generation replaces the old one cleanly', async (
   const v2 = makeOfficialChat({ prefix: '[v2]' })   // re-imported module = new class
   const ctx = new Context()
   const fiber1 = await ctx.plugin(v1.plugin)
-  const facade = await ctx.plugin(createForge([messagePoint()]))
+  const facade = await ctx.plugin(createNeoForge([messagePoint()]))
   const seen: unknown[] = []
   ctx.on('official-chat/message', (e) => seen.push(e.result))
 
@@ -360,7 +360,7 @@ test('HMR rollback: old module generation re-binds after a failed replace', asyn
   const v2 = makeOfficialChat({ prefix: '[v2]' })
   const ctx = new Context()
   const fiber1 = await ctx.plugin(v1.plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   const seen: unknown[] = []
   ctx.on('official-chat/message', (e) => seen.push(e.result))
 
@@ -381,7 +381,7 @@ test('HMR ordering: dependent fibers see patched behavior on their first reload 
   const v2 = makeOfficialChat({ prefix: '[v2]' })
   const ctx = new Context()
   const fiber1 = await ctx.plugin(v1.plugin)
-  await ctx.plugin(createForge([messagePoint()]))
+  await ctx.plugin(createNeoForge([messagePoint()]))
   const seen: unknown[] = []
   ctx.on('official-chat/message', (e) => seen.push(e.result))
 
@@ -406,17 +406,17 @@ test('HMR ordering: dependent fibers see patched behavior on their first reload 
 
 // ---------- standard service / policy / interface abstraction ----------
 
-test('forge is a standard cordis service: injectable and introspectable', async () => {
+test('neoforge is a standard cordis service: injectable and introspectable', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([messagePoint()]))
-  assert.ok(ctx.get('forge'))
+  await ctx.plugin(createNeoForge([messagePoint()]))
+  assert.ok(ctx.get('neoforge'))
   let seen: unknown
   await ctx.plugin({
     name: 'introspector',
-    inject: ['forge'],
-    apply(c: any) { seen = c.forge.status().length },
+    inject: ['neoforge'],
+    apply(c: any) { seen = c.neoforge.status().length },
   })
   assert.equal(seen, 1)
 })
@@ -425,34 +425,34 @@ test('host policy: denied points never bind', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  const governed = ctx.intercept('forge', { deny: ['official-chat/message'] })
-  await governed.plugin(createForge([messagePoint()]))
+  const governed = ctx.intercept('neoforge', { deny: ['official-chat/message'] })
+  await governed.plugin(createNeoForge([messagePoint()]))
   let fired = 0
   ctx.on('official-chat/message', () => fired++)
   assert.equal(ctx.get('chat').send('x'), '[official] x')
   assert.equal(fired, 0)
-  assert.equal(getForgeStatus(ctx)[0].status, 'denied')
+  assert.equal(getNeoForgeStatus(ctx)[0].status, 'denied')
 })
 
 test('host policy: allowMutate=false downgrades to observe-only', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  const governed = ctx.intercept('forge', { allowMutate: false })
-  await governed.plugin(createForge([messagePoint()]))
+  const governed = ctx.intercept('neoforge', { allowMutate: false })
+  await governed.plugin(createNeoForge([messagePoint()]))
   let observed: unknown
   ctx.on('official-chat/message/before', (e) => { e.args[0] = 'HACKED' })   // attempt is discarded
   ctx.on('official-chat/message', (e) => { observed = e.result })
   assert.equal(ctx.get('chat').send('clean'), '[official] clean')           // mutation did not flow back
   assert.equal(observed, '[official] clean')                                 // observation still works
-  assert.equal(getForgeStatus(ctx)[0].downgraded, true)
+  assert.equal(getNeoForgeStatus(ctx)[0].downgraded, true)
 })
 
 test('interface abstraction: map exposes a stable payload instead of raw args', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()
   await ctx.plugin(plugin)
-  await ctx.plugin(createForge([defineInjectionPoint({
+  await ctx.plugin(createNeoForge([defineInjectionPoint({
     id: 'official-chat/message',
     tier: 2,
     runtime: { service: 'chat', method: '_processMessage' },

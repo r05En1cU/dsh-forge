@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { FabricOperation, ForgeEvent, Hooks, InjectionPoint } from './types.ts'
-import { createForgeEvent, detachedEvent } from './dispatch.ts'
+import type { FabricOperation, NeoForgeEvent, Hooks, InjectionPoint } from './types.ts'
+import { createNeoForgeEvent, detachedEvent } from './dispatch.ts'
 
 /**
  * The single interception primitive: every operation (`before` / `after` /
@@ -79,8 +79,8 @@ export function createEventPhases(
   mutate: boolean,
   operation: FabricOperation,
 ): OperationPhases {
-  const beforeEvent = (call: OperationCall): ForgeEvent => {
-    const event = createForgeEvent(point, {
+  const beforeEvent = (call: OperationCall): NeoForgeEvent => {
+    const event = createNeoForgeEvent(point, {
       args: call.args,
       mixin: point.mixin?.id,
       self: call.self,

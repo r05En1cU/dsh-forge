@@ -18,7 +18,7 @@ export interface FabricPatchStubLike {
 function assertId(id: string, what: string): void {
   if (!MIXIN_ID_RE.test(id)) {
     throw new Error(
-      `forge: invalid ${what} ${JSON.stringify(id)}, expected one or more '/'-separated segments matching ${MIXIN_ID_RE}`,
+      `neoforge: invalid ${what} ${JSON.stringify(id)}, expected one or more '/'-separated segments matching ${MIXIN_ID_RE}`,
     )
   }
 }
@@ -32,7 +32,7 @@ export function normalizeMixin(id: string, ref: MixinRef): Readonly<Mixin> {
   assertId(id, 'mixin id')
   const ownId = 'id' in ref ? ref.id : undefined
   if (ownId !== undefined && ownId !== id) {
-    throw new Error(`forge: point "${id}" cannot carry mixin id "${ownId}"; omit id to inherit the point id`)
+    throw new Error(`neoforge: point "${id}" cannot carry mixin id "${ownId}"; omit id to inherit the point id`)
   }
   const mixin: Mixin = {
     id,
@@ -42,19 +42,19 @@ export function normalizeMixin(id: string, ref: MixinRef): Readonly<Mixin> {
     required: ref.required,
   }
   if (!mixin.target || typeof mixin.target.module !== 'string' || !mixin.target.module) {
-    throw new Error(`forge: mixin "${id}" requires target.module`)
+    throw new Error(`neoforge: mixin "${id}" requires target.module`)
   }
   if (typeof mixin.target.versionRange !== 'string' || !mixin.target.versionRange) {
-    throw new Error(`forge: mixin "${id}" requires target.versionRange`)
+    throw new Error(`neoforge: mixin "${id}" requires target.versionRange`)
   }
   if (!mixin.target.functionQuery && !mixin.target.astQuery) {
-    throw new Error(`forge: mixin "${id}" requires target.functionQuery or target.astQuery`)
+    throw new Error(`neoforge: mixin "${id}" requires target.functionQuery or target.astQuery`)
   }
   if (mixin.target.filePath && mixin.target.filePaths) {
-    throw new Error(`forge: mixin "${id}" target.filePath and target.filePaths are mutually exclusive`)
+    throw new Error(`neoforge: mixin "${id}" target.filePath and target.filePaths are mutually exclusive`)
   }
   if (!['before', 'after', 'around', 'replace'].includes(mixin.operation)) {
-    throw new Error(`forge: mixin "${id}" has invalid operation ${JSON.stringify(mixin.operation)}`)
+    throw new Error(`neoforge: mixin "${id}" has invalid operation ${JSON.stringify(mixin.operation)}`)
   }
   return Object.freeze(mixin)
 }
@@ -93,7 +93,7 @@ export function buildPatchStubs(inputs: readonly (CatalogInput | InjectionPointI
   const seen = new Set<string>()
   const push = (mixin: Mixin, forceRequired = false) => {
     if (seen.has(mixin.id)) {
-      throw new Error(`forge: duplicate fabric patch id "${mixin.id}" in buildPatchStubs`)
+      throw new Error(`neoforge: duplicate fabric patch id "${mixin.id}" in buildPatchStubs`)
     }
     seen.add(mixin.id)
     const stub = toStub(mixin)

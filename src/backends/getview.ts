@@ -1,5 +1,5 @@
 import type { Backend } from '../types.ts'
-import { createForgeEvent, dispatchCall } from '../dispatch.ts'
+import { createNeoForgeEvent, dispatchCall } from '../dispatch.ts'
 
 /**
  * Tier 1: wrap the consumer-facing view of a service via Cordis's official
@@ -25,7 +25,7 @@ export function createGetViewBackend(): Backend {
             const member = Reflect.get(target, prop, receiver)
             if (prop !== method || typeof member !== 'function') return member
             return (...args: unknown[]) => {
-              const event = createForgeEvent(point, { service, method, args })
+              const event = createNeoForgeEvent(point, { service, method, args })
               return dispatchCall(hooks, point, consumerCtx, event,
                 (a) => Reflect.apply(member, receiver, a), options.mutate)
             }

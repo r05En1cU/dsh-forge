@@ -1,5 +1,5 @@
 import { kOptOut, kOriginal, type Backend, type BindStatus } from '../types.ts'
-import { createForgeEvent, dispatchCall } from '../dispatch.ts'
+import { createNeoForgeEvent, dispatchCall } from '../dispatch.ts'
 
 interface Entry {
   wrapper: Function
@@ -76,7 +76,7 @@ export function createPrototypeBackend(): Backend {
           if (!state.active) return orig.apply(this, args)
           // Route events through the service's own context when available.
           const eventCtx = this?.ctx ?? ctx
-          const event = createForgeEvent(point, { service, method, args })
+          const event = createNeoForgeEvent(point, { service, method, args })
           return dispatchCall(hooks, point, eventCtx, event, (a) => orig.apply(this, a), options.mutate)
         }
         Object.defineProperty(proto, method, { ...desc, value: wrapper })

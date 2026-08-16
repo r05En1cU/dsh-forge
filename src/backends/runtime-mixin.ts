@@ -285,7 +285,7 @@ export function createPatchSession(
     if (mark) {
       if (mark.id === mixin.id && mark.owner === owner) return 'bound'
       throw new Error(
-        `forge: runtime mixin "${mixin.id}" conflicts with "${String(mark.id)}" on ` +
+        `neoforge: runtime mixin "${mixin.id}" conflicts with "${String(mark.id)}" on ` +
         `${describeTarget(holder, key)} — a runtime patch target is exclusive; ` +
         `the same target cannot be patched by multiple third-party packages`,
       )
