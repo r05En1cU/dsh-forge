@@ -16,8 +16,7 @@ export {
   defineInjectionPoint,
   defineEventPoint,
 } from './neoforge.ts'
-export { defineMixin, buildPatchStubs, MIXIN_ID_RE } from './mixin.ts'
-export type { FabricPatchStubLike } from './mixin.ts'
+export { defineMixin, MIXIN_ID_RE } from './mixin.ts'
 export { NeoForgeService } from './service.ts'
 export type { NeoForgePolicy, PointRecord, RegisterOptions } from './service.ts'
 export { contractSuite } from './testkit.ts'
@@ -40,10 +39,8 @@ export type {
   VNode,
   VNodeChild,
 } from './ui/index.ts'
-export { createFabricBackend } from './backends/fabric.ts'
 export { satisfies } from './version.ts'
 export type { RuntimeMixinOptions } from './backends/runtime-mixin.ts'
-export type { FabricBackendOptions } from './backends/fabric.ts'
 export { kOptOut, kPatched } from './types.ts'
 export type {
   Backend,
@@ -51,8 +48,8 @@ export type {
   BindResult,
   BindStatus,
   Catalog,
-  FabricOperation,
-  FabricTargetRef,
+  MixinOperation,
+  MixinTargetRef,
   NeoForgeEvent,
   Hooks,
   InjectionPoint,

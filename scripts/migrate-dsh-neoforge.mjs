@@ -8,7 +8,6 @@
  * Defaults:
  *   --dry-run
  *   scans src/**, test/**, README.md, docs/**, package.json, LICENSE,
- *   and research/fabric/FABRIC_UPSTREAM.md.
  *
  * The rules are ordered to avoid double-Neo replacements and only touch
  * well-known API names. User-defined event ids like 'my/event' are preserved.
@@ -29,7 +28,7 @@ for (const arg of args) {
 
 const patterns = paths.length > 0
   ? paths
-  : ['src/**/*.{ts,js,mjs}', 'test/**/*.{ts,js,mjs}', 'README.md', 'docs/**/*.md', 'package.json', 'LICENSE', 'research/fabric/FABRIC_UPSTREAM.md']
+  : ['src/**/*.{ts,js,mjs}', 'test/**/*.{ts,js,mjs}', 'README.md', 'docs/**/*.md', 'package.json', 'LICENSE']
 
 // docs/usage.md intentionally contains a before/after migration table; the
 // script must not rewrite that reference table.

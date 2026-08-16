@@ -392,24 +392,6 @@ test('source: mixin is the canonical runtime mixin declaration', async (t) => {
   assert.equal(runtime.helper, original)
 })
 
-test('source: fabric is loud unavailable unless the host wired ctx.fabric', async () => {
-  const ctx = new Context()
-  await ctx.plugin(createNeoForge([defineInjectionPoint({
-    id: 'runtime/fabric-only',
-    source: {
-      kind: 'fabric',
-      target: {
-        module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js',
-        functionQuery: { functionName: 'helper', kind: 'Sync' },
-      },
-      operation: 'before',
-    },
-  })]))
-  const record = getNeoForgeStatus(ctx)[0]
-  assert.equal(record.backend, 'fabric')
-  assert.equal(record.status, 'unavailable')
-  assert.equal(record.kind, 'fabric')
-})
 
 test('source: inconsistent legacy fields next to source fail at definition time', () => {
   assert.throws(() => defineInjectionPoint({

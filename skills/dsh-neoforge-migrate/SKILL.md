@@ -22,7 +22,7 @@ node scripts/migrate-dsh-neoforge.mjs --dry-run
 node scripts/migrate-dsh-neoforge.mjs --write
 ```
 
-Default scan covers `src`, `test`, `README.md`, `docs` (excluding the migration table in `docs/usage.md`), `package.json`, `LICENSE`, and `research/fabric/FABRIC_UPSTREAM.md`. For explicit files:
+Default scan covers `src`, `test`, `README.md`, `docs` (excluding the migration table in `docs/usage.md`), `package.json`, and `LICENSE`. For explicit files:
 
 ```sh
 node scripts/migrate-dsh-neoforge.mjs --write src/catalog.ts test/catalog.test.ts
@@ -65,7 +65,6 @@ The old shape still works and is normalized automatically:
 ```ts
 defineInjectionPoint({ id, tier: 2, runtime: { service, method } })
 defineInjectionPoint({ id, tier: 3, mixin })
-defineInjectionPoint({ id, tier: 3, fabric })
 ```
 
 Recommended new shape:
@@ -89,7 +88,7 @@ defineEventPoint({
 })
 ```
 
-Only use `kind: 'fabric'` for ESM named exports, `#private`, closures, and browser-only targets.
+For runtime-unreachable targets, prefer an official event/service seam or expose a mutable handle.
 
 ## Step 4 — Fix generated artifacts and lockfiles
 
@@ -125,5 +124,5 @@ Only the intentional migration table in `docs/usage.md` may mention old names.
 - Never run a blind `s/Forge/NeoForge/g`: it produces `NeoNeoForge`.
 - Never run a blind `s/forge/neoforge/g` after capitalized replacements: it can double `neoforge` in `neoforge/module` and `neoforge-relay`.
 - Do not rename user event ids. `ctx.on('my/action')` is a catalog contract, not a package API name.
-- Do not edit vendored upstream history except the local overlay note in `research/fabric/FABRIC_UPSTREAM.md`.
+- Do not introduce a load-time transformation dependency.
 - When migrating a catalog package, bump its peer dependency to `dsh-neoforge` and update its `Events` augmentation to `NeoForgeEvent<T>`.

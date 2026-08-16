@@ -2,7 +2,7 @@
 
 面向 DeepSeek Harness（DSH）插件开发的**类 NeoForge 标准 API 层**：
 
-- **语义化 source，先 seam 后 mixin**：catalog 作者声明 `event / service / view / mixin / fabric`，后端自动选择；官方已有事件或服务方法时零补丁。
+- **语义化 source，先 seam 后 mixin**：catalog 作者声明 `event / service / view / mixin`，后端自动选择；官方已有事件或服务方法时零补丁。
 - **Mixin 是一等公民**：`defineMixin()` 是显式、可版本治理的织入声明；默认在**运行期**解析目标、保留旧快照、执行修改后的包装，卸载时恢复旧快照——不需要宿主安装任何加载期 hooks。
 - **运行期目标全局独占**：同一目标被多个第三方包 patch 时直接 loud error，不做隐式链式叠加。
 - **事件总线复用官方 HMR**：`ctx.on('vendor/action', handler)` / `ctx.neoforge.on(...)` 就是官方 Cordis 事件注册，fiber 卸载自动回收 listener。
@@ -13,7 +13,6 @@
   ├─ service   → internal/service + 原型快照/恢复
   ├─ view      → internal/get 消费方视图
   ├─ mixin     → 运行期 resolve → descriptor 快照 → wrapper → 恢复
-  └─ fabric    → 可选加载期桥（仅运行期不可达目标）
                     │
                     ▼
             {id}/before (ctx.bail) + {id} (ctx.emit)
@@ -202,7 +201,7 @@ reloadModule(ctx, { ...same, exports: freshExports })
 untrackModule(ctx, '@pkg/lib/index.js')
 ```
 
-事件派发是同步的，因此 reload 完成后旧 holder 已恢复、新 holder 已 patch。该层仍只对运行期可写的 CJS exports / class prototype 有效；ESM named export 绑定依旧需要 `kind: 'fabric'`。
+事件派发是同步的，因此 reload 完成后旧 holder 已恢复、新 holder 已 patch。该层只对运行期可写的 CJS exports / class prototype 有效；ESM named export 绑定应改用官方事件或 service seam。
 
 ## HMR 语义
 
@@ -210,7 +209,7 @@ untrackModule(ctx, '@pkg/lib/index.js')
 - **catalog/neoforge 插件自身**：注册是 `ctx.effect`；卸载恢复快照，重载重新注册。
 - **service 类目标**：完整代际 HMR。`internal/service` 同步通知，新类 prototype 在同一窗口内完成 `retire(old) → attach(new)`。
 - **模块级 CJS 目标**：无官方“模块被重新求值”事件，运行期无法自动感知；`getNeoForgeStatus(ctx)` / `status()` 会重新解析已绑定目标，发现新 exports holder 后自动退役旧快照、补丁新 holder。
-- **ESM named export / `#private` / 闭包**：运行期不可达，仍走 `kind: 'fabric'` 可选加载期桥。
+- **ESM named export / `#private` / 闭包**：运行期不可达；dsh-neoforge 不再内置加载期桥，请改用官方事件、service seam，或让目标模块暴露可变句柄。
 
 ## 服务与治理
 
@@ -226,7 +225,7 @@ ctx.neoforge.status()                  // 每个注入点的 source/后端/绑�
 ctx.neoforge.on(name, listener)        // = ctx.on，官方 HMR 事件路径
 ```
 
-旧 catalog 的 `tier/runtime/mixin/fabric` 字段会 normalize 为语义 source，现有声明无需迁移。
+旧 catalog 的 `tier/runtime/mixin` 字段会 normalize 为语义 source，现有声明无需迁移。
 
 ## 统一 UI 服务：page → layer → slot → component
 
@@ -280,7 +279,7 @@ GUI/React Native 可以用同一套 `SurfaceAdapter` 约定接自己的 service�
 ## WebUI / TUI：事件跨树
 
 
-- **TUI（cc-tui）**：Node 同树场景直接 `ctx.on`，无需额外层；组件注入仍按目标可达性选择 `mixin` 或 `fabric`。
+- **TUI（cc-tui）**：Node 同树场景直接 `ctx.on`，无需额外层；组件注入仅在目标运行期可达时使用 `mixin`。
 - **WebUI**：浏览器是另一棵 Cordis 树，使用两个新入口：
 
 ```ts
@@ -306,26 +305,13 @@ ctx.plugin(createNeoForgeClient({
 
 `createNeoForgeClient` 是浏览器安全入口，不 import 任何 Node builtin；事件到达浏览器树后，UI 注册仍走官方 `ctx.slots` / `ctx.command`，neoforge 只负责事件语义跨树。
 
-## 可选：保留加载期桥
-
-运行期不可达目标可显式声明 `source: { kind: 'fabric' }`，并导出静态 stubs 由宿主自行 bootstrap：
-
-```ts
-import { buildPatchStubs } from 'dsh-neoforge'
-import { bootstrapFabric } from 'cordis-fabric'
-
-bootstrapFabric(buildPatchStubs([catalog]))
-```
-
-这是兼容出口，不是默认路径；`dsh-neoforge` 本身不依赖 `cordis-fabric`。
-
 ## 开发
 
 ```sh
 pnpm install         # 同时执行 prepare 构建 dist/
 pnpm run typecheck   # tsc strict
-pnpm test            # 57 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
+pnpm test            # 55 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
 pnpm run build       # dist/ ESM + d.ts
 ```
 
-要求 Node ≥ 22.19；ESM class 运行期补丁依赖当前 Node 的同步 `require(esm)`（Node 24 默认启用）。架构决策见 [`docs/architecture.md`](docs/architecture.md)，完整调用文档见 [`docs/usage.md`](docs/usage.md)，迁移技能见 [`skills/dsh-neoforge-migrate/SKILL.md`](skills/dsh-neoforge-migrate/SKILL.md)，vendored 上游参考 [`research/fabric`](research/fabric)。
+要求 Node ≥ 22.19；ESM class 运行期补丁依赖当前 Node 的同步 `require(esm)`（Node 24 默认启用）。架构决策见 [`docs/architecture.md`](docs/architecture.md)，完整调用文档见 [`docs/usage.md`](docs/usage.md)，迁移技能见 [`skills/dsh-neoforge-migrate/SKILL.md`](skills/dsh-neoforge-migrate/SKILL.md)。

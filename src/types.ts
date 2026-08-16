@@ -7,16 +7,11 @@ export const kOriginal = Symbol.for('cordis.original')
 /** Marks runtime-mixin wrappers; shared across package copies for chain diagnostics. */
 export const kPatched = Symbol.for('dsh-neoforge.patched')
 
-/** Fabric patch behavior kind, identical to cordis-fabric's FabricOperation. */
-export type FabricOperation = 'before' | 'after' | 'around' | 'replace'
+/** Mixin behavior kind. */
+export type MixinOperation = 'before' | 'after' | 'around' | 'replace'
 
-/**
- * Structural mirror of cordis-fabric's FabricTarget. The standard layer keeps
- * no hard runtime dependency on the unpublished fabric package; when the host
- * provides `ctx.fabric`, the descriptor is forwarded verbatim and validated by
- * fabric's own validator.
- */
-export interface FabricTargetRef {
+/** Runtime-reachable module target descriptor. */
+export interface MixinTargetRef {
   /** npm package name matched against the resolved module's owner. */
   module: string
   /** semver range the owning package version must satisfy. */
@@ -33,20 +28,14 @@ export interface FabricTargetRef {
 }
 
 /**
- * A first-class Mixin declaration: one fabric patch descriptor without its
- * runtime handler. Mixins are versioned, priority-ordered, validated at
- * definition time, compiled into load-time instrumentation stubs by
- * `buildPatchStubs()`, and registered at runtime through `ctx.neoforge.registerMixin()`.
+ * A first-class Mixin declaration: runtime snapshot/restore target plus
+ * operation. No load-time engine or host bootstrap is involved.
  */
 export interface Mixin {
   /** Patch id, also the default event namespace for the derived event point. */
   id: string
-  target: FabricTargetRef
-  operation: FabricOperation
-  /** Higher priorities run first (outermost), matching cordis-fabric. */
-  priority?: number
-  /** Fail startup loudly when the load-time transform bound nothing. */
-  required?: boolean
+  target: MixinTargetRef
+  operation: MixinOperation
 }
 
 /** A mixin reference inside an event point; the id may default to the point id. */
@@ -63,7 +52,7 @@ export type MixinRef = Mixin | Omit<Mixin, 'id'>
 export interface NeoForgeEvent<TPayload = Record<string, unknown>> {
   /** Event point id, e.g. 'official-chat/message'. */
   point: string
-  /** First-class mixin id when the point is fabric-backed. */
+  /** First-class mixin id when the point is mixin-backed. */
   mixin?: string
   /** Service name (runtime targets). */
   service?: string
@@ -75,9 +64,9 @@ export interface NeoForgeEvent<TPayload = Record<string, unknown>> {
   payload?: TPayload
   /** Settled result; only present on observe events (and around after-phase). */
   result?: unknown
-  /** Original `this` receiver of the intercepted call (fabric targets). */
+  /** Original `this` receiver of the intercepted call. */
   self?: unknown
-  /** Version of the owning package captured at fabric transformation time. */
+  /** Version of the owning package, when supplied by a module lifecycle record. */
   moduleVersion?: string
   /** `around` only: set true to skip the original body and return `result`. */
   veto?: boolean
@@ -93,8 +82,8 @@ export interface RuntimeTarget {
 
 /**
  * Semantic target declaration. Catalog authors describe intent instead of a
- * magic tier; `tier/runtime/mixin/fabric` legacy fields are normalized into
- * this union by `defineInjectionPoint()`.
+ * magic tier; legacy `tier/runtime/mixin` fields are normalized into this
+ * union by `defineInjectionPoint()`.
  */
 export type PointSource =
   /** Official event already exists: alias it, patch nothing. */
@@ -104,9 +93,7 @@ export type PointSource =
   /** Patch a Cordis service prototype method (`internal/service`). */
   | { kind: 'service'; service: string; method: string }
   /** Runtime mixin: resolve + snapshot + wrap + restore. */
-  | { kind: 'mixin'; target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
-  /** Optional load-time fabric bridge for runtime-unreachable targets. */
-  | { kind: 'fabric'; target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
+  | { kind: 'mixin'; target: MixinTargetRef; operation: MixinOperation }
 
 /**
  * One injection point: the event bus contract over a semantic `source`.
@@ -115,7 +102,7 @@ export type PointSource =
  * - `{id}`        — observe event, dispatched after the call settles
  * - `{id}/before` — power phase (`ctx.bail`), dispatched before the call
  *
- * Which phases exist for a fabric-backed point follows the mixin operation:
+ * Which phases exist for a mixin-backed point follows the mixin operation:
  *
  * | operation | `{id}/before` | `{id}`        |
  * |-----------|---------------|---------------|
@@ -129,17 +116,12 @@ export interface InjectionPoint {
   id: string
   /** Canonical semantic source. */
   source: PointSource
-  /** Derived legacy tier: 0=event, 1=view, 2=service, 3=mixin/fabric. */
+  /** Derived legacy tier: 0=event, 1=view, 2=service, 3=mixin. */
   tier: 0 | 1 | 2 | 3
   /** Derived legacy runtime target for view/service sources. */
   runtime?: RuntimeTarget
-  /** Derived first-class mixin for mixin/fabric sources. */
+  /** Derived first-class mixin for mixin sources. */
   mixin?: Mixin
-  /**
-   * @deprecated legacy nested form; `defineInjectionPoint()` normalizes it
-   * into a first-class `mixin` field. New catalogs should pass `mixin`.
-   */
-  fabric?: { target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
   /** 'observe' (default) | 'mutate' | 'replace'. Mutating points are review-listed. */
   requires?: 'observe' | 'mutate' | 'replace'
   /**
@@ -168,8 +150,6 @@ export interface InjectionPointInput {
   tier?: 0 | 1 | 2 | 3
   runtime?: RuntimeTarget
   mixin?: MixinRef
-  /** @deprecated legacy nested load-time form. */
-  fabric?: { target: FabricTargetRef; operation: FabricOperation; priority?: number; required?: boolean }
   requires?: 'observe' | 'mutate' | 'replace'
   map?: InjectionPoint['map']
   engineExclusive?: boolean
@@ -210,10 +190,7 @@ export interface BindResult {
   dispose?: () => void
   /**
    * Lazy re-validation, called by diagnostics. Runtime backends report their
-   * live status; the fabric backend re-checks bridge registration, load-time
-   * bindings and the target versionRange — tier-3 transforms cannot be
-   * refreshed at runtime, so drift surfaces as 'stale' (loud degradation)
-   * instead of silent fiction.
+   * live status and re-resolve pending or replaced holders.
    */
   verify?: () => BindStatus
 }
@@ -224,7 +201,7 @@ export interface Hooks {
   after(eventCtx: Context, event: NeoForgeEvent): void
 }
 
-/** An interception engine. Selection is per-point via `InjectionPoint.tier`. */
+/** An interception engine. Selection is per-point via `InjectionPoint.source`. */
 export interface Backend {
   name: string
   available(ctx: Context): boolean

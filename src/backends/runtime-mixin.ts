@@ -2,7 +2,7 @@ import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Backend, BindResult, BindStatus, FabricTargetRef, Hooks, Mixin } from '../types.ts'
+import type { Backend, BindResult, BindStatus, MixinTargetRef, Hooks, Mixin } from '../types.ts'
 import { satisfies } from '../version.ts'
 import { kOriginal, kPatched } from '../types.ts'
 import { createEventPhases, createRawPhases, wrapOperation } from '../advice.ts'
@@ -44,11 +44,11 @@ export function ownFunctionDesc(target: object, key: PropertyKey): PropertyDescr
   return desc && typeof desc.value === 'function' ? desc : undefined
 }
 
-export function queryOf(target: FabricTargetRef): FunctionQueryLike {
+export function queryOf(target: MixinTargetRef): FunctionQueryLike {
   return (target.functionQuery ?? {}) as FunctionQueryLike
 }
 
-export function specifiersOf(target: FabricTargetRef): string[] {
+export function specifiersOf(target: MixinTargetRef): string[] {
   if (target.filePath) return [`${target.module}/${target.filePath.replace(/^\/+/, '')}`]
   if (target.filePaths?.length) {
     return target.filePaths.map((file) => `${target.module}/${file.replace(/^\/+/, '')}`)
@@ -73,7 +73,7 @@ function versionNear(resolvedPath: string): string | undefined {
   }
 }
 
-function versionMismatch(target: FabricTargetRef, resolvedPath: string, options: RuntimeMixinOptions): Resolution | undefined {
+function versionMismatch(target: MixinTargetRef, resolvedPath: string, options: RuntimeMixinOptions): Resolution | undefined {
   const version = options.readVersion?.(target.module) ?? (resolvedPath ? versionNear(resolvedPath) : undefined)
   if (version !== undefined && !satisfies(version, target.versionRange)) {
     return { ok: false, status: 'missing', reason: `installed version ${version} does not satisfy ${target.versionRange}` }
@@ -95,7 +95,7 @@ function getProp(value: unknown, key: PropertyKey): unknown {
   return isExportsObject(value) ? (value as Record<PropertyKey, unknown>)[key] : undefined
 }
 
-export function findFunction(target: FabricTargetRef, exports: unknown, resolvedPath: string, options: RuntimeMixinOptions): Resolution {
+export function findFunction(target: MixinTargetRef, exports: unknown, resolvedPath: string, options: RuntimeMixinOptions): Resolution {
   const mismatch = versionMismatch(target, resolvedPath, options)
   if (mismatch) return mismatch
 
@@ -188,7 +188,7 @@ export function findFunction(target: FabricTargetRef, exports: unknown, resolved
 }
 
 /** Load a mutable CommonJS exports object synchronously. */
-export function loadTarget(target: FabricTargetRef, options: RuntimeMixinOptions): Resolution {
+export function loadTarget(target: MixinTargetRef, options: RuntimeMixinOptions): Resolution {
   const specs = specifiersOf(target)
   let lastError: string | undefined
   let lastStatus: BindStatus | undefined
@@ -347,7 +347,7 @@ export function mixinOwner(ctx: Context): unknown {
   return fiber.entry ?? fiber.runtime?.callback ?? ctx.fiber
 }
 
-function canUseServiceFallback(target: FabricTargetRef): boolean {
+function canUseServiceFallback(target: MixinTargetRef): boolean {
   const query = queryOf(target)
   return !!(query.methodName && !query.privateMethodName)
 }
@@ -466,7 +466,7 @@ interface RawCall {
 
 /**
  * Low-level runtime mixin registration without event projection. The handler
- * receives the same `(call, invoke?)` contract as cordis-fabric and the patch
+ * receives the same `(call, invoke?)` contract and the patch
  * is snapshot/restore based, owned by the calling fiber through `ctx.effect`.
  */
 export function installRuntimeMixin(ctx: Context, mixin: Mixin, handler: (call: RawCall, invoke?: () => unknown) => unknown, options: RuntimeMixinOptions = {}): BindResult {

@@ -3,7 +3,6 @@
 > 包名：`dsh-neoforge`
 > 运行环境：Node ≥ 22.19（ESM class 运行期补丁建议 Node ≥ 24.11）
 > 唯一硬 peer：`@deepseek-ai/cordis ^4.0.1-0`
-> 可选：`cordis-fabric >=0.0.1-rc.2`（仅 `source.kind === 'fabric'`）
 
 ## 0. 包入口
 
@@ -38,7 +37,7 @@ catalog  ──定义──> injection points（source）
                         │
                  NeoForgeService（ctx.neoforge）
                         │
-                 backend：event / view / service / mixin / fabric
+                 backend：event / view / service / mixin
                         │
                  Advice（唯一操作原语）
                         │
@@ -50,7 +49,7 @@ catalog  ──定义──> injection points（source）
 一个 injection point 描述：
 
 1. 目标在哪里：`source`
-2. 调用前后做什么：`operation`（mixin/fabric）或固定两阶段（view/service）
+2. 调用前后做什么：`operation`（mixin）或固定两阶段（view/service）
 3. 给下游什么：事件 id、payload、能力 `requires`
 
 ---
@@ -74,7 +73,6 @@ export const recomposeMixin = defineMixin({
   },
   operation: 'around',                  // before | after | around | replace
   priority: 100,                        // 越大越外层
-  required: false,                      // fabric 桥的 fail-loud 标记
 })
 ```
 
@@ -86,7 +84,7 @@ export const recomposeMixin = defineMixin({
 | `{ expressionName, kind }` | 同上 |
 | `{ className, methodName, kind }` | class prototype / static method，走 runtime-mixin |
 | `{ methodName, kind }` | 导出中唯一同名方法，多匹配会要求 `className` |
-| `{ className, privateMethodName }` | `#private`：运行期不可达，仅 fabric |
+| `{ className, privateMethodName }` | `#private`：运行期不可达 |
 
 不可达目标会返回 `unavailable`：ESM named export、`#private`、`astQuery`、闭包。
 
@@ -94,7 +92,7 @@ export const recomposeMixin = defineMixin({
 
 ## 3. 语义 source：`defineEventPoint`
 
-推荐 catalog 全部使用 `defineEventPoint`。旧字段 `tier/runtime/mixin/fabric` 仍兼容。
+推荐 catalog 全部使用 `defineEventPoint`。旧字段 `tier/runtime/mixin` 仍兼容。
 
 ### 3.1 `event`：官方已有事件，零补丁
 
@@ -168,27 +166,6 @@ defineEventPoint({
 - 其他查询路由到 runtime-mixin 快照/恢复；
 - 同一 `(holder, key)` 被第二个第三方 mixin patch 时直接抛错。
 
-### 3.5 `fabric`：可选加载期桥
-
-```ts
-defineEventPoint({
-  id: 'permission/effective',
-  requires: 'mutate',
-  source: {
-    kind: 'fabric',
-    target: {
-      module: '@deepseek-ai/dsh-permission-presets',
-      versionRange: '>=0.0.0-0',
-      filePath: 'lib/index.js',
-      functionQuery: { functionName: 'effectivePermissionPreset', kind: 'Sync' },
-    },
-    operation: 'around',
-  },
-})
-```
-
-仅用于运行期原理性不可达目标；宿主需通过 `fabric-dsh` 或等价方式安装 hooks。
-
 ---
 
 ## 4. `defineCatalog`
@@ -245,9 +222,6 @@ await ctx.plugin(createNeoForge(catalog, {
   mixin: {
     resolveModule: (specifier) => exportsObject, // 自定义模块解析
     readVersion: (module) => '1.2.0',            // 版本漂移诊断
-  },
-  fabric: {
-    readVersion: (module) => '1.2.0',
   },
 }))
 ```
@@ -350,12 +324,12 @@ const status = getNeoForgeStatus(ctx)
   point: string
   tier: number
   source: PointSource
-  kind: 'event' | 'view' | 'service' | 'mixin' | 'fabric'
+  kind: 'event' | 'view' | 'service' | 'mixin'
   backend: string
   status: 'bound' | 'pending' | 'missing' | 'opted-out'
         | 'unavailable' | 'stale' | 'denied'
   reason?: string
-  operation?: FabricOperation
+  operation?: MixinOperation
   downgraded?: boolean
 }
 ```
@@ -366,8 +340,8 @@ const status = getNeoForgeStatus(ctx)
 | `pending` | 目标尚未出现；等待 `internal/service`、module event 或 `status()` 重试 |
 | `missing` | 目标已加载但函数/版本不匹配 |
 | `opted-out` | 官方插件声明 `Symbol.for('dsh-neoforge.optout')` |
-| `unavailable` | ESM named export / `#private` / `astQuery` / 无 fabric bridge |
-| `stale` | fabric 绑定或版本已漂移 |
+| `unavailable` | ESM named export / `#private` / `astQuery` / 目标描述符不可写 |
+| `stale` | 模块版本已漂移 |
 | `denied` | 宿主 policy 拒绝 |
 
 ### 6.3 Host policy
@@ -550,22 +524,6 @@ const guiAdapter: SurfaceAdapter = {
 
 ---
 
-## 10. 可选 fabric 桥
-
-```ts
-import { buildPatchStubs } from 'dsh-neoforge'
-import { bootstrapFabric } from 'cordis-fabric'
-
-bootstrapFabric(buildPatchStubs([catalog]))
-```
-
-- 只有 `source.kind === 'fabric'`（或旧 `fabric` 字段）生成 stubs；
-- runtime mixin 不生成 stubs；
-- 最新 fabric 通过 `fabric-dsh` 启动器实现零 host patch，但仍需在模块 import 前安装 hooks；
-- npm 预构建 `dsh` 不支持该桥。
-
----
-
 ## 11. HMR
 
 | 对象 | HMR 行为 |
@@ -575,7 +533,6 @@ bootstrapFabric(buildPatchStubs([catalog]))
 | view/service | `internal/service` 同步代际交接 |
 | service 类 mixin | `internal/service` 同步代际交接 |
 | 模块级 CJS mixin | 由 `neoforge/module/reload` 驱动；或 `status()` 重解析 |
-| fabric | handler 可挂卸；transform 覆盖不可运行时刷新，漂移报 `stale` |
 | relay/client | timer、route、listener 均为 fiber effect |
 
 ---
@@ -612,7 +569,7 @@ contractSuite(chatCatalog, {
 })
 ```
 
-每个 catalog 应附带一个 harness；运行期 tier 点必须 `bound` 且 observe 事件恰好一次。mixin/fabric 点由 `test/runtime-mixin.test.ts` 等价套件或真实目标测试覆盖。
+每个 catalog 应附带一个 harness；运行期 tier 点必须 `bound` 且 observe 事件恰好一次。mixin 点由 `test/runtime-mixin.test.ts` 等价套件或真实目标测试覆盖。
 
 ---
 
@@ -642,7 +599,7 @@ AI agent 可调用 `skills/dsh-neoforge-migrate/SKILL.md` 完成带校验的迁�
 | `forge/module/*` | `neoforge/module/*` |
 | `/forge/snapshot` | `/neoforge/snapshot` |
 
-旧 catalog 的 `tier/runtime/mixin/fabric` 字段仍然可用，会被 normalize 成语义 `source`。
+旧 catalog 的 `tier/runtime/mixin` 字段仍然可用，会被 normalize 成语义 `source`。
 
 ---
 

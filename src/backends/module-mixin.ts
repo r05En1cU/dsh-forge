@@ -1,4 +1,4 @@
-import type { Backend, BindStatus, FabricTargetRef } from '../types.ts'
+import type { Backend, BindStatus, MixinTargetRef } from '../types.ts'
 import type { RuntimeMixinOptions } from './runtime-mixin.ts'
 import {
   createPatchSession,
@@ -12,7 +12,7 @@ import { MODULE_EVENTS, type ModuleRecord } from '../module-events.ts'
 import { createEventPhases, wrapOperation } from '../advice.ts'
 import { satisfies } from '../version.ts'
 
-function matchesRecord(target: FabricTargetRef, record: ModuleRecord): boolean {
+function matchesRecord(target: MixinTargetRef, record: ModuleRecord): boolean {
   if (specifiersOf(target).includes(record.id)) return true
   if (record.module !== target.module) return false
   const files = target.filePath ? [target.filePath] : target.filePaths

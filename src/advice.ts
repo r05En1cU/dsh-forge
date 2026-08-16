@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { FabricOperation, NeoForgeEvent, Hooks, InjectionPoint } from './types.ts'
+import type { MixinOperation, NeoForgeEvent, Hooks, InjectionPoint } from './types.ts'
 import { createNeoForgeEvent, detachedEvent } from './dispatch.ts'
 
 /**
@@ -35,7 +35,7 @@ export function settleOperation(value: unknown, settle: (value: unknown) => unkn
  * `proceed`.
  */
 export function dispatchOperation(
-  operation: FabricOperation,
+  operation: MixinOperation,
   call: OperationCall,
   proceed: () => unknown,
   phases: OperationPhases,
@@ -70,14 +70,14 @@ function eventContextFor(call: OperationCall, fallback: Context): Context {
 /**
  * Compile a mixin operation into OperationPhases that dispatch the standard
  * `{id}/before` + `{id}` Cordis events. Used by the runtime-mixin backend and
- * the optional fabric backend.
+ * runtime backends.
  */
 export function createEventPhases(
   hooks: Hooks,
   point: InjectionPoint,
   fallbackCtx: Context,
   mutate: boolean,
-  operation: FabricOperation,
+  operation: MixinOperation,
 ): OperationPhases {
   const beforeEvent = (call: OperationCall): NeoForgeEvent => {
     const event = createNeoForgeEvent(point, {
@@ -150,7 +150,7 @@ interface RawCallLike {
   result?: unknown
 }
 
-/** Compile the cordis-fabric `(call, invoke?)` handler contract into phases. */
+/** Compile the raw `(call, invoke?)` handler contract into phases. */
 export function createRawPhases(
   handler: (call: RawCallLike, invoke?: () => unknown) => unknown,
 ): OperationPhases {
@@ -176,7 +176,7 @@ export function createRawPhases(
 /** Wrap a function with operation phases; callers still own snapshot/restore. */
 export function wrapOperation(
   original: Function,
-  operation: FabricOperation,
+  operation: MixinOperation,
   phases: OperationPhases,
 ): Function {
   return function (this: unknown, ...args: unknown[]) {

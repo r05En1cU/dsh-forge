@@ -16,7 +16,6 @@
 │   defineEventPoint  —— 语义 source → 稳定事件契约          │
 │   defineCatalog     —— 每个官方包一份版本化 catalog         │
 │   NeoForgeService      —— 注册、诊断、host policy             │
-│   buildPatchStubs   —— 可选：仅 kind:'fabric' 编译 stub    │
 ├──────────────────────────────────────────────────────────┤
 │ Advice 层（唯一操作原语）                                   │
 │   before/after/around/replace 全部投影为 around(proceed)    │
@@ -25,7 +24,6 @@
 │ event  → 官方事件别名      │ runtime-mixin（默认 mixin）     │
 │ view   → internal/get      │   resolve → descriptor 快照    │
 │ service→ internal/service  │   → wrapper → 恢复             │
-│ fabric → 可选加载期桥      │                              │
 └───────────────────────────┴──────────────────────────────┘
 │ Cordis 内核（事件、fiber、reflect、loader HMR）             │
 └──────────────────────────────────────────────────────────┘
@@ -58,11 +56,10 @@ source:
   | { kind: 'event'; event: string }                          // 官方事件，零补丁
   | { kind: 'view'; service; method }                         // 消费方视图
   | { kind: 'service'; service; method }                      // 服务原型
-  | { kind: 'mixin'; target; operation; priority?; required? } // 运行期 mixin
-  | { kind: 'fabric'; target; operation; priority?; required? } // 可选加载期桥
+  | { kind: 'mixin'; target; operation }                       // 运行期 mixin
 ```
 
-旧 `tier/runtime/mixin/fabric` 字段在 `defineInjectionPoint()` 中 normalize 为 source，现有 catalog 不迁移也能跑。
+旧 `tier/runtime/mixin` 字段在 `defineInjectionPoint()` 中 normalize 为 source，现有 catalog 不迁移也能跑。
 
 ## 4. 运行期 Mixin
 
@@ -104,12 +101,12 @@ HMR 分级：
 - service 类目标：`internal/service` 同步代际交接，新类 prototype 自动补丁；
 - 模块级函数目标：由 `neoforge/module/load|reload|unload` 自定义事件层驱动；宿主发布 reload 后同一同步调用内退役旧 holder、patch 新 holder；
 - 无发布者的模块级 CJS 目标：`status()/verify()` 重新解析作为兜底；
-- ESM named export / `#private` / 闭包：运行期不可达，只能走 `kind: 'fabric'` 加载期桥。
+- ESM named export / `#private` / 闭包：运行期不可达；应改用官方事件、service seam 或让模块暴露可变句柄。
 
 ## 5. 关键决策
 
 - **不另造事件发射器**：事件总线就是 `ctx.bail/emit/on`，HMR 回收、context 过滤、isolate 语义免费复用。
-- **seam-first**：审核顺序固定为官方事件 → 官方服务 → view → mixin → fabric。
+- **seam-first**：审核顺序固定为官方事件 → 官方服务 → view → mixin。
 - **能力显式**：`requires: 'observe' | 'mutate' | 'replace'`；宿主 `ctx.intercept('neoforge', { allowMutate: false })` 降级为只读。
 - **drift 响亮**：版本漂移报 `missing/stale`；运行期不可达目标报 `unavailable`，不静默。
 
@@ -119,7 +116,7 @@ HMR 分级：
 src/
   advice.ts          OperationPhases + dispatchOperation（唯一操作原语）
   version.ts         satisfies：保守 semver 漂移诊断
-  mixin.ts           defineMixin / buildPatchStubs（可选 fabric 出口）
+  mixin.ts           defineMixin / 目标校验
   registry.ts        defineEventPoint / defineCatalog / source normalize
   service.ts         NeoForgeService：source → backend、诊断、registerMixin
   dispatch.ts        事件构造 + tier 1/2 的 dispatchCall
@@ -129,7 +126,6 @@ src/
     prototype.ts     service source
     runtime-mixin.ts class/service mixin：resolve + 快照 + wrapper + 独占冲突
     module-mixin.ts  functionName/expressionName mixin：消费模块生命周期事件
-    fabric.ts        fabric source：可选加载期桥
   module-events.ts   neoforge/module/load|reload|unload 自定义事件层
   relay.ts           host 侧 webserver 快照路由（WebUI relay）
   client.ts          dsh-neoforge/client：浏览器安全轮询/re-emit
@@ -138,7 +134,6 @@ src/
 test/
   neoforge.test.ts             tier 1/2、HMR、policy、registry、stub 编译
   runtime-mixin.test.ts     运行期 mixin、冲突 loud error、语义 source
-research/fabric/           vendored 参考，仅可选加载期桥使用
 ```
 
 ## 7. UI 侧
@@ -153,4 +148,4 @@ research/fabric/           vendored 参考，仅可选加载期桥使用
 
 - 不提供 `@SubscribeEvent` 装饰器：`ctx.on` 是官方方式。
 - 不镜像 `ctx.slots` / `ctx.tools` 等已有官方注册面。
-- 浏览器端运行期注入不在本层范围；浏览器目标走 `kind: 'fabric'` 可选桥。
+- 浏览器端运行期注入不在本层范围；优先使用 `dsh-neoforge/ui` + 官方 `ctx.slots`。

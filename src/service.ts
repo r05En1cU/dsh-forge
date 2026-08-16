@@ -7,7 +7,6 @@ import { createPrototypeBackend } from './backends/prototype.ts'
 import { createRuntimeMixinBackend, installRuntimeMixin, type RuntimeMixinOptions } from './backends/runtime-mixin.ts'
 import { createModuleMixinBackend } from './backends/module-mixin.ts'
 import { createEventAliasBackend } from './backends/event-alias.ts'
-import { createFabricBackend, type FabricBackendOptions } from './backends/fabric.ts'
 
 /** Host policy, settable per subtree via `ctx.intercept('neoforge', …)`. */
 export interface NeoForgePolicy {
@@ -20,8 +19,6 @@ export interface NeoForgePolicy {
 export interface RegisterOptions {
   /** Options for the runtime mixin backend. */
   mixin?: RuntimeMixinOptions
-  /** Options for the optional load-time fabric bridge. */
-  fabric?: FabricBackendOptions
 }
 
 export interface PointRecord extends BindResult {
@@ -59,8 +56,6 @@ function pointFromMixin(input: Mixin): Readonly<InjectionPoint> {
       kind: 'mixin',
       target: mixin.target,
       operation: mixin.operation,
-      priority: mixin.priority,
-      required: mixin.required,
     },
     requires,
   })
@@ -87,7 +82,6 @@ function backendForSource(source: PointSource, options: RegisterOptions): Backen
         ? createModuleMixinBackend(options.mixin)
         : createRuntimeMixinBackend(options.mixin)
     }
-    case 'fabric': return createFabricBackend(options.fabric)
   }
 }
 

@@ -69,8 +69,8 @@ export { defineMixin } from './mixin.ts'
 export type {
   Catalog,
   CatalogInput,
-  FabricOperation,
-  FabricTargetRef,
+  MixinOperation,
+  MixinTargetRef,
   NeoForgeEvent,
   NeoForgeSnapshot,
   InjectionPoint,

@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
-  buildPatchStubs,
   contractSuite,
   createNeoForge,
   defineCatalog,
@@ -69,42 +68,29 @@ const helperPoint = () => defineInjectionPoint({
 
 // ---------- first-class mixin declarations ----------
 
-test('defineMixin validates and freezes; buildPatchStubs compiles the bootstrap seam', () => {
+test('defineMixin validates and freezes runtime mixin declarations', () => {
   const mixin = defineMixin({
     id: 'official-chat/helper',
     target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
     operation: 'before',
-    priority: 100,
-    required: true,
   })
   assert.ok(Object.isFrozen(mixin))
-  assert.throws(() => defineMixin({ id: 'bad id', target: { module: 'm', versionRange: '*' }, operation: 'before' }))
-  assert.throws(() => defineMixin({ id: 'a/b', target: { module: 'm', versionRange: '*' }, operation: 'nonsense' as any }))
-
-  const [stub] = buildPatchStubs([mixin])
-  assert.deepEqual(stub, {
-    id: 'official-chat/helper',
-    target: mixin.target,
-    operation: 'before',
-    required: true,
-    priority: 100,
-  })
-  assert.throws(() => buildPatchStubs([mixin, mixin]))
+  assert.throws(() => defineMixin({ id: 'bad id', target: { module: 'm', versionRange: '*', functionQuery: { functionName: 'f' } }, operation: 'before' }))
+  assert.throws(() => defineMixin({ id: 'a/b', target: { module: 'm', versionRange: '*', functionQuery: { functionName: 'f' } }, operation: 'nonsense' as any }))
 })
 
-test('defineInjectionPoint normalizes legacy fabric into a first-class mixin', () => {
+test('defineInjectionPoint normalizes legacy tier/mixin into a first-class mixin', () => {
   const point = defineInjectionPoint({
     id: 'official-chat/helper',
     tier: 3,
-    fabric: {
+    mixin: {
       target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
       operation: 'before',
     },
   })
   assert.equal(point.mixin?.id, 'official-chat/helper')
   assert.equal(point.mixin?.operation, 'before')
-  assert.equal('fabric' in point, false)
-  assert.equal(buildPatchStubs([[point]]).length, 1)
+  assert.equal(point.source.kind, 'mixin')
 })
 
 test('ctx.neoforge.on/once/emit/bail are 1:1 delegates of the official Cordis event path', async () => {
@@ -512,26 +498,3 @@ test('satisfies supports the ranges real DSH catalogs use', async () => {
   assert.equal(satisfies('1.3.0', '~1.2.0'), false)
 })
 
-
-// ---------- optional load-time stub compilation by semantic source ----------
-
-test('buildPatchStubs compiles only fabric sources, not runtime mixins', () => {
-  const fabricPoint = defineInjectionPoint({
-    id: 'official-chat/helper',
-    source: {
-      kind: 'fabric',
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
-      operation: 'before',
-    },
-  })
-  const runtimePoint = defineInjectionPoint({
-    id: 'official-chat/runtime',
-    source: {
-      kind: 'mixin',
-      target: { module: '@official/chat', versionRange: '^1.0.0', filePath: 'lib/util.js', functionQuery: { functionName: 'helper' } },
-      operation: 'before',
-    },
-  })
-  const stubs = buildPatchStubs([[fabricPoint, runtimePoint]])
-  assert.deepEqual(stubs.map((s) => s.id), ['official-chat/helper'])
-})
