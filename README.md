@@ -22,7 +22,28 @@
         社区插件 ctx.on('vendor/action', …)
 ```
 
+## 与 `dsh plugin add` 相容
+
+dsh-neoforge 现在同时是库和 bundle carrier：
+
+```sh
+dsh plugin --profile web add github:r05En1cU/dsh-neoforge
+```
+
+- 安装后注入一个默认禁用的 `dsh-neoforge` 行；
+- 默认不 mount，不会作为 plugin 启动；
+- 其他插件可以直接 `import from 'dsh-neoforge'`；
+- 如果宿主想挂载基础服务，可在 profile overlay 启用：
+
+```yaml
+- id: dsh-neoforge
+  disabled: false
+```
+
+启用后根入口作为标准 function plugin 执行，等价于调用一次 `getNeoForge(ctx)`，挂载 `ctx.neoforge`。
+
 ## 快速开始
+
 
 ### 1. catalog 作者：语义 source + 稳定事件
 
@@ -303,7 +324,7 @@ bootstrapFabric(buildPatchStubs([catalog]))
 ```sh
 pnpm install         # 同时执行 prepare 构建 dist/
 pnpm run typecheck   # tsc strict
-pnpm test            # 56 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
+pnpm test            # 57 项：Advice + source + runtime/module mixin + WebUI relay/client + ctx.ui + HMR + policy
 pnpm run build       # dist/ ESM + d.ts
 ```
 

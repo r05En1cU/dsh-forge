@@ -1,3 +1,13 @@
+import type { Context } from '@deepseek-ai/cordis'
+import { getNeoForge } from './neoforge.ts'
+
+/** Standard function-plugin shape: mounts the base service when the row is enabled. */
+export const name = 'dsh-neoforge'
+
+export function apply(ctx: Context): void {
+  getNeoForge(ctx)
+}
+
 export {
   createNeoForge,
   getNeoForge,

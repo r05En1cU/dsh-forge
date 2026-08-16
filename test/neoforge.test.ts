@@ -406,6 +406,15 @@ test('HMR ordering: dependent fibers see patched behavior on their first reload 
 
 // ---------- standard service / policy / interface abstraction ----------
 
+test('root entry is a valid dsh function plugin (disabled carrier row)', async () => {
+  const mod = await import('../src/index.ts')
+  assert.equal(mod.name, 'dsh-neoforge')
+  assert.equal(typeof mod.apply, 'function')
+  const ctx = new Context()
+  await ctx.plugin({ name: mod.name, apply: mod.apply })
+  assert.ok(ctx.get('neoforge', false))
+})
+
 test('neoforge is a standard cordis service: injectable and introspectable', async () => {
   const { plugin } = makeOfficialChat()
   const ctx = new Context()

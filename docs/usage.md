@@ -16,8 +16,15 @@
 
 ```sh
 pnpm add dsh-neoforge @deepseek-ai/cordis
-# 或通过 profile bundle 安装
+# 或通过官方 plugin channel 安装 bundle carrier
 dsh plugin --profile <profile> add github:r05En1cU/dsh-neoforge
+```
+
+`dsh plugin add` 会在 profile 中插入默认禁用的 `dsh-neoforge` 行。默认只安装包、不 mount 插件；启用该行会执行根入口的 `apply`，挂载 `ctx.neoforge`。
+
+```yaml
+- id: dsh-neoforge
+  disabled: false
 ```
 
 ---

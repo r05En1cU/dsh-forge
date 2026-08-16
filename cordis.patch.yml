@@ -1,0 +1,8 @@
+# dsh-neoforge is a library plus an optional host bundle row.
+# The row ships disabled so `dsh plugin add` installs the package into the
+# profile without mounting it; plugins that consume dsh-neoforge import it
+# directly, and hosts that want the base service can enable this row.
+- insert:
+    - id: dsh-neoforge
+      name: 'dsh-neoforge'
+      disabled: true
