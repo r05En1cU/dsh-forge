@@ -194,6 +194,14 @@ export interface Catalog {
   points: InjectionPoint[]
 }
 
+/**
+ * JSON snapshot served by a host-side forge relay and consumed by the
+ * browser-safe client entry. `events` contains the latest event per point.
+ */
+export interface ForgeSnapshot {
+  events: ForgeEvent[]
+}
+
 export type BindStatus = 'bound' | 'pending' | 'missing' | 'opted-out' | 'unavailable' | 'stale' | 'denied'
 
 export interface BindResult {

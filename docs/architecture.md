@@ -131,6 +131,8 @@ src/
     module-mixin.ts  functionName/expressionName mixin：消费模块生命周期事件
     fabric.ts        fabric source：可选加载期桥
   module-events.ts   forge/module/load|reload|unload 自定义事件层
+  relay.ts           host 侧 webserver 快照路由（WebUI relay）
+  client.ts          dsh-forge/client：浏览器安全轮询/re-emit
   testkit.ts         contractSuite
 test/
   forge.test.ts             tier 1/2、HMR、policy、registry、stub 编译
@@ -138,7 +140,14 @@ test/
 research/fabric/           vendored 参考，仅可选加载期桥使用
 ```
 
-## 7. 非目标
+## 7. UI 侧
+
+- TUI（cc-tui）同树直接消费 `ctx.on`；组件注入按目标可达性选择 runtime mixin 或 fabric。
+- WebUI 是独立浏览器树：`dsh-forge/relay` 在宿主经官方 `ctx.webServer` exact route 发布最新事件，`dsh-forge/client` 在浏览器轮询并 re-emit 同名事件。
+- UI 注册面仍归官方 `ctx.slots` / `ctx.command`；forge 不镜像注册 API。
+- `src/client.ts` 保持零 Node builtin，可被浏览器 bundle 直接包含。
+
+## 8. 非目标
 
 - 不提供 `@SubscribeEvent` 装饰器：`ctx.on` 是官方方式。
 - 不镜像 `ctx.slots` / `ctx.tools` 等已有官方注册面。

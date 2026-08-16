@@ -207,6 +207,34 @@ ctx.forge.on(name, listener)        // = ctx.on，官方 HMR 事件路径
 
 旧 catalog 的 `tier/runtime/mixin/fabric` 字段会 normalize 为语义 source，现有声明无需迁移。
 
+## WebUI / TUI：事件跨树
+
+- **TUI（cc-tui）**：Node 同树场景直接 `ctx.on`，无需额外层；组件注入仍按目标可达性选择 `mixin` 或 `fabric`。
+- **WebUI**：浏览器是另一棵 Cordis 树，使用两个新入口：
+
+```ts
+// host 侧：把最新事件发布到官方 webserver exact route
+import { createForgeRelay } from 'dsh-forge'
+
+ctx.plugin(createForgeRelay({
+  path: '/forge/snapshot',
+  points: ['agent-preset/switch'],
+}))
+```
+
+```ts
+// browser 侧：dsh-forge/client 轮询 relay 并 re-emit 同名 forge 事件
+import { createForgeClient } from 'dsh-forge/client'
+
+ctx.plugin(createForgeClient({
+  route: '/forge/snapshot',
+  points: ['agent-preset/switch'],
+  interval: 1500,
+}))
+```
+
+`createForgeClient` 是浏览器安全入口，不 import 任何 Node builtin；事件到达浏览器树后，UI 注册仍走官方 `ctx.slots` / `ctx.command`，forge 只负责事件语义跨树。
+
 ## 可选：保留加载期桥
 
 运行期不可达目标可显式声明 `source: { kind: 'fabric' }`，并导出静态 stubs 由宿主自行 bootstrap：
@@ -225,7 +253,7 @@ bootstrapFabric(buildPatchStubs([catalog]))
 ```sh
 pnpm install         # 同时执行 prepare 构建 dist/
 pnpm run typecheck   # tsc strict
-pnpm test            # 45 项：Advice 归一 + source 语义 + runtime/module 快照恢复 + HMR + policy
+pnpm test            # 50 项：Advice + source + runtime/module mixin + WebUI relay/client + HMR + policy
 pnpm run build       # dist/ ESM + d.ts
 ```
 
